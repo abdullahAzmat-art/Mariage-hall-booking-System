@@ -1,0 +1,4 @@
+/* Default App styles cleared to prevent layout conflicts */
+#root {
+  width: 100%;
+}

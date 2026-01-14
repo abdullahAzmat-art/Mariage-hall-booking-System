@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+    /* Primary is now Dark Gold/Bronze */
+    --color-primary: #78350F;
+    /* Amber 900 - Deep Bronze */
+    --color-primary-dark: #451A03;
+    /* Amber 950 */
+    --color-secondary: #D97706;
+    /* Amber 600 */
+    --color-accent: #FFFBEB;
+    /* Amber 50 */
+
+    /* Restore Gold variables */
+    --color-gold: #B45309;
+    /* Amber 700 */
+    --color-gold-light: #F59E0B;
+    /* Amber 500 */
+    --color-gold-dark: #78350F;
+    /* Amber 900 */
+
+    --color-text: #1F2937;
+    --color-text-light: #6B7280;
+
+    --font-poppins: Poppins, sans-serif;
+    --font-playfair: "Playfair Display", serif;
+
+    --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
+    --shadow-glow: 0 0 20px rgba(180, 83, 9, 0.4);
+}
+
+@layer utilities {
+    .glass {
+        @apply bg-white/10 backdrop-blur-lg border border-white/20 shadow-xl;
+    }
+
+    .glass-dark {
+        @apply bg-black/30 backdrop-blur-lg border border-white/10 shadow-xl;
+    }
+
+    .text-gradient-gold {
+        @apply bg-clip-text text-transparent bg-gradient-to-r from-gold-light via-gold to-gold-dark;
+    }
+
+    .btn-primary {
+        @apply bg-gradient-to-r from-primary to-primary-dark text-white px-8 py-3 rounded-full hover:shadow-lg hover:scale-105 transition-all duration-300 font-medium tracking-wide;
+    }
+
+    .btn-gold {
+        @apply bg-gradient-to-r from-gold to-gold-dark text-white px-8 py-3 rounded-full hover:shadow-glow hover:scale-105 transition-all duration-300 font-medium tracking-wide;
+    }
+
+    .card-hover {
+        @apply hover:-translate-y-2 hover:shadow-2xl transition-all duration-500 ease-out;
+    }
+}

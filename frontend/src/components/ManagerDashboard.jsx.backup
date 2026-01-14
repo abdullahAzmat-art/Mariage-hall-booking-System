@@ -1,0 +1,351 @@
+import React, { useState, useEffect } from 'react';
+import { FaPlus, FaBuilding, FaMoneyBillWave, FaTrash } from 'react-icons/fa';
+import hallService from '../services/hallService';
+import bookingService from '../services/bookingService';
+
+const ManagerDashboard = () => {
+    const [activeTab, setActiveTab] = useState('bookings');
+    const [halls, setHalls] = useState([]);
+    const [bookings, setBookings] = useState([]);
+    const [showAddHallForm, setShowAddHallForm] = useState(false);
+    const [hallForm, setHallForm] = useState({
+        name: '',
+        location: '',
+        capacity: '',
+        price: '',
+        amenities: '',
+        description: '',
+        image: null
+    });
+
+    useEffect(() => {
+        if (activeTab === 'halls') {
+            fetchHalls();
+        } else if (activeTab === 'bookings') {
+            fetchBookings();
+        }
+    }, [activeTab]);
+
+    const fetchHalls = async () => {
+        try {
+            const data = await hallService.getManagerHalls();
+            setHalls(data);
+        } catch (error) {
+            console.error('Failed to fetch halls', error);
+        }
+    };
+
+    const fetchBookings = async () => {
+        try {
+            const data = await bookingService.getAllBookings();
+            setBookings(data);
+        } catch (error) {
+            console.error('Failed to fetch bookings', error);
+        }
+    };
+
+    const handleApprove = async (bookingId) => {
+        try {
+            await bookingService.updateBookingStatus(bookingId, 'approved');
+            alert('Booking approved successfully');
+            fetchBookings();
+        } catch (error) {
+            console.error('Approve error:', error);
+            alert(error.response?.data?.message || 'Failed to approve booking');
+        }
+    };
+
+    const handleReject = async (bookingId) => {
+        if (window.confirm('Are you sure you want to reject and delete this booking?')) {
+            try {
+                await bookingService.deleteBooking(bookingId);
+                alert('Booking rejected and deleted successfully');
+                fetchBookings();
+            } catch (error) {
+                console.error('Reject error:', error);
+                alert(error.response?.data?.message || 'Failed to reject booking');
+            }
+        }
+    };
+
+    const handleComplete = async (bookingId) => {
+        if (window.confirm('Mark this booking as completed?')) {
+            try {
+                await bookingService.updateBookingStatus(bookingId, 'completed');
+                alert('Booking marked as completed');
+                fetchBookings();
+            } catch (error) {
+                console.error('Complete error:', error);
+                alert(error.response?.data?.message || 'Failed to mark as complete');
+            }
+        }
+    };
+
+    const handleDeleteBooking = async (bookingId) => {
+        if (window.confirm('Are you sure you want to delete this booking?')) {
+            try {
+                await bookingService.deleteBooking(bookingId);
+                alert('Booking deleted successfully');
+                fetchBookings();
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert(error.response?.data?.message || 'Failed to delete booking');
+            }
+        }
+    };
+
+    const handleDeleteHall = async (hallId) => {
+        if (window.confirm('Are you sure you want to delete this hall?')) {
+            try {
+                await hallService.deleteHall(hallId);
+                setHalls(halls.filter(hall => hall._id !== hallId));
+                alert('Hall deleted successfully');
+            } catch (error) {
+                alert('Failed to delete hall');
+            }
+        }
+    };
+
+    const handleCreateHall = async (e) => {
+        e.preventDefault();
+        try {
+            const formData = new FormData();
+            formData.append('name', hallForm.name);
+            formData.append('location', hallForm.location);
+            formData.append('capacity', hallForm.capacity);
+            formData.append('price', hallForm.price);
+            formData.append('description', hallForm.description);
+            formData.append('image', hallForm.image);
+
+            const amenitiesArray = hallForm.amenities.split(',').map(item => item.trim());
+            amenitiesArray.forEach((amenity) => {
+                formData.append('amenities', amenity);
+            });
+
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            if (user && user._id) {
+                formData.append('manager', user._id);
+            }
+
+            await hallService.createHall(formData);
+            alert('Hall created successfully!');
+            fetchHalls();
+            setShowAddHallForm(false);
+            setHallForm({
+                name: '',
+                location: '',
+                capacity: '',
+                price: '',
+                amenities: '',
+                description: '',
+                image: null
+            });
+        } catch (error) {
+            const message = error.response?.data?.message || 'Failed to create hall';
+            alert(message);
+            console.error(error);
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-gray-500">Total Bookings</h3>
+                        <FaBuilding className="text-primary text-xl" />
+                    </div>
+                    <p className="text-3xl font-bold text-text">{bookings.length}</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-gray-500">Active Halls</h3>
+                        <FaBuilding className="text-blue-500 text-xl" />
+                    </div>
+                    <p className="text-3xl font-bold text-text">{halls.length}</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-gray-500">Revenue</h3>
+                        <FaMoneyBillWave className="text-green-500 text-xl" />
+                    </div>
+                    <p className="text-3xl font-bold text-text">Rs {bookings.reduce((total, booking) => total + (booking.totalAmount || 0), 0).toLocaleString()}</p>
+                </div>
+            </div>
+
+            <div className="flex space-x-4 overflow-x-auto pb-2">
+                <button
+                    onClick={() => setActiveTab('bookings')}
+                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'bookings' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                >
+                    Manage Bookings
+                </button>
+                <button
+                    onClick={() => setActiveTab('halls')}
+                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'halls' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                >
+                    Manage Halls
+                </button>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6 min-h-[400px]">
+                {activeTab === 'bookings' && (
+                    <div>
+                        <h2 className="text-xl font-bold text-text mb-6">Manage Bookings</h2>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-50 text-gray-600 font-medium">
+                                    <tr>
+                                        <th className="p-4">ID</th>
+                                        <th className="p-4">Customer</th>
+                                        <th className="p-4">Hall</th>
+                                        <th className="p-4">Date</th>
+                                        <th className="p-4">Status</th>
+                                        <th className="p-4">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {bookings.length > 0 ? (
+                                        bookings.map((booking) => (
+                                            <tr key={booking._id} className="hover:bg-gray-50">
+                                                No bookings found
+                                            </td>
+                                        </tr>
+                                    )}
+                            </tbody>
+                        </table>
+                    </div>
+                    </div>
+                )}
+
+            {activeTab === 'halls' && (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-text">Manage Halls</h2>
+                        <button
+                            onClick={() => setShowAddHallForm(!showAddHallForm)}
+                            className="btn-primary flex items-center px-4 py-2 text-sm"
+                        >
+                            <FaPlus className="mr-2" /> {showAddHallForm ? 'Cancel' : 'Add New Hall'}
+                        </button>
+                    </div>
+
+                    {showAddHallForm ? (
+                        <form onSubmit={handleCreateHall} className="max-w-2xl space-y-4 mb-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Hall Name</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
+                                        value={hallForm.name}
+                                        onChange={(e) => setHallForm({ ...hallForm, name: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
+                                        value={hallForm.location}
+                                        onChange={(e) => setHallForm({ ...hallForm, location: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
+                                        value={hallForm.capacity}
+                                        onChange={(e) => setHallForm({ ...hallForm, capacity: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Price per Seat</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
+                                        value={hallForm.price}
+                                        onChange={(e) => setHallForm({ ...hallForm, price: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Amenities (comma separated)</label>
+                                <input
+                                    type="text"
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
+                                    placeholder="AC, Parking, WiFi"
+                                    value={hallForm.amenities}
+                                    onChange={(e) => setHallForm({ ...hallForm, amenities: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Hall Image</label>
+                                <input
+                                    type="file"
+                                    required
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
+                                    onChange={(e) => setHallForm({ ...hallForm, image: e.target.files[0] })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                <textarea
+                                    rows="4"
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
+                                    value={hallForm.description}
+                                    onChange={(e) => setHallForm({ ...hallForm, description: e.target.value })}
+                                ></textarea>
+                            </div>
+                            <button type="submit" className="btn-primary px-6 py-2">Create Hall</button>
+                        </form>
+                    ) : null}
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50 text-gray-600 font-medium">
+                                <tr>
+                                    <th className="p-4">Name</th>
+                                    <th className="p-4">Location</th>
+                                    <th className="p-4">Capacity</th>
+                                    <th className="p-4">Price</th>
+                                    <th className="p-4">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {halls.map(hall => (
+                                    <tr key={hall._id} className="hover:bg-gray-50">
+                                        <td className="p-4 font-medium">{hall.name}</td>
+                                        <td className="p-4 text-gray-600">{hall.location}</td>
+                                        <td className="p-4">{hall.capacity}</td>
+                                        <td className="p-4">Rs {hall.price}</td>
+                                        <td className="p-4">
+                                            <button
+                                                onClick={() => handleDeleteHall(hall._id)}
+                                                className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors"
+                                                title="Delete Hall"
+                                            >
+                                                <FaTrash />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {halls.length === 0 && !showAddHallForm && (
+                            <p className="text-center text-gray-500 py-4">No halls found. Click "Add New Hall" to create one.</p>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+        </div >
+    );
+};
+
+export default ManagerDashboard;
