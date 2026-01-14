@@ -1,7 +1,7 @@
 import axios from 'axios';
 import authService from './authService';
 
-const API_URL = 'http://localhost:5000/api/commissions/';
+const API_URL = 'https://mariage-hall-booking-system.vercel.app/api/commissions/';
 
 const uploadPaymentProof = async (paymentId, formData) => {
     const response = await axios.post(API_URL + 'upload-proof/' + paymentId, formData, {

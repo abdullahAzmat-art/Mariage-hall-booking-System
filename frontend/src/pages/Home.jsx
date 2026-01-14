@@ -180,7 +180,7 @@ const Home = () => {
                                                 }
                                                 const imagePath = hall.image || hall.images[0];
                                                 if (imagePath.startsWith('http')) return imagePath;
-                                                return `http://localhost:5000/${imagePath.replace(/\\/g, '/')}`;
+                                                return `https://mariage-hall-booking-system.vercel.app/${imagePath.replace(/\\/g, '/')}`;
                                             })()}
                                             alt={hall.name}
                                             className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"

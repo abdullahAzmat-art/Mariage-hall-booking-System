@@ -1,7 +1,7 @@
 import axios from 'axios';
 import authService from './authService';
 
-const API_URL = 'http://localhost:5000/api/complaints/';
+const API_URL = 'https://mariage-hall-booking-system.vercel.app/api/complaints/';
 
 const createComplaint = async (complaintData) => {
     const response = await axios.post(API_URL, complaintData, {

@@ -27,7 +27,7 @@ const ChatWindow = ({ onClose }) => {
         setLoading(true);
 
         try {
-            const res = await axios.post('http://localhost:5000/api/chat', { message: input });
+            const res = await axios.post('https://mariage-hall-booking-system.vercel.app/api/chat', { message: input });
             const botMessage = { sender: 'bot', text: res.data.reply };
             setMessages(prev => [...prev, botMessage]);
         } catch (error) {

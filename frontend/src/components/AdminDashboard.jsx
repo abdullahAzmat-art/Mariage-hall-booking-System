@@ -417,7 +417,7 @@ const AdminDashboard = () => {
                                             <div className="mb-4">
                                                 <p className="text-sm font-medium text-gray-700 mb-2">Payment Proof:</p>
                                                 <img
-                                                    src={`http://localhost:5000/${payment.paymentProof}`}
+                                                    src={`https://mariage-hall-booking-system.vercel.app/${payment.paymentProof}`}
                                                     alt="Payment Proof"
                                                     className="max-w-md rounded-lg border border-gray-300"
                                                 />

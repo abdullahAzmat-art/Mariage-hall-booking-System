@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { FiSend, FiMoreVertical } from 'react-icons/fi';
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000", {
+const socket = io("https://mariage-hall-booking-system.vercel.app", {
   transports: ["websocket"],
 });
 
@@ -115,7 +115,7 @@ const Message = () => {
   // Fetch user details helper
   const fetchUserDetails = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/user/${userId}`);
+      const response = await fetch(`https://mariage-hall-booking-system.vercel.app/api/user/${userId}`);
       if (response.ok) {
         return await response.json();
       }
@@ -144,7 +144,7 @@ const Message = () => {
 
     const fetchConversations = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/chat/conversations/${user}`);
+        const response = await fetch(`https://mariage-hall-booking-system.vercel.app/api/chat/conversations/${user}`);
         if (response.ok) {
           const data = await response.json();
           setChats(prev => {
@@ -167,7 +167,7 @@ const Message = () => {
 
     const fetchChatHistory = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/chat/messages/${user}/${activeChat}`);
+        const response = await fetch(`https://mariage-hall-booking-system.vercel.app/api/chat/messages/${user}/${activeChat}`);
         if (response.ok) {
           const dbMessages = await response.json();
           const mappedMessages = dbMessages.map(msg => ({
