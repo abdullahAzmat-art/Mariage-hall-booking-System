@@ -1,56 +1,70 @@
 @import "tailwindcss";
 
 @theme {
-    /* Primary is now Dark Gold/Bronze */
-    --color-primary: #78350F;
-    /* Amber 900 - Deep Bronze */
-    --color-primary-dark: #451A03;
-    /* Amber 950 */
-    --color-secondary: #D97706;
-    /* Amber 600 */
-    --color-accent: #FFFBEB;
-    /* Amber 50 */
+    /* Legacy palette — preserved for locked hero & backward compatibility */
+    --color-primary: #3b1c32; 
+    --color-primary-dark: #24111f;
+    --color-secondary: #fffff0;
+    --color-accent: #d4af37;
+    --color-plum: #3b1c32;
+    --color-plum-dark: #24111f;
+    --color-ivory: #fffff0;
+    --color-ivory-dark: #f3f3e0;
+    --color-ivory-warm: #FDFBF7;
+    --color-gold: #d4af37;
+    --color-gold-light: #f3e5ab;
+    --color-gold-dark: #aa8c2c;
+    --color-text: #1A1F2E;
+    --color-text-light: #6b7280;
+    --color-text-plum: #3b1c32;
 
-    /* Restore Gold variables */
-    --color-gold: #B45309;
-    /* Amber 700 */
-    --color-gold-light: #F59E0B;
-    /* Amber 500 */
-    --color-gold-dark: #78350F;
-    /* Amber 900 */
+    /* Venuora palette */
+    --color-navy: #1A1F2E;
+    --color-navy-dark: #0F1219;
+    --color-terracotta: #B8622D;
+    --color-terracotta-light: #E8B896;
+    --color-body: #5C5A57;
+    --color-cta: #7A3419;
+    --color-cta-hover: #B8622D;
 
-    --color-text: #1F2937;
-    --color-text-light: #6B7280;
-
-    --font-poppins: Poppins, sans-serif;
-    --font-playfair: "Playfair Display", serif;
+    --font-poppins: "Manrope", "Inter", sans-serif;
+    --font-playfair: "Fraunces", "Playfair Display", serif;
+    --font-body: "Manrope", "Inter", sans-serif;
 
     --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
-    --shadow-glow: 0 0 20px rgba(180, 83, 9, 0.4);
+    --shadow-glow: 0 0 20px rgba(212, 175, 55, 0.4);
 }
 
 @layer utilities {
     .glass {
-        @apply bg-white/10 backdrop-blur-lg border border-white/20 shadow-xl;
+        @apply bg-white/80 backdrop-blur-lg border border-gray-100 shadow-sm;
     }
 
     .glass-dark {
-        @apply bg-black/30 backdrop-blur-lg border border-white/10 shadow-xl;
+        @apply bg-navy/90 backdrop-blur-lg border border-white/10 shadow-xl;
     }
 
     .text-gradient-gold {
-        @apply bg-clip-text text-transparent bg-gradient-to-r from-gold-light via-gold to-gold-dark;
+        @apply bg-clip-text text-transparent bg-gradient-to-r from-terracotta-light via-terracotta to-terracotta;
     }
 
     .btn-primary {
-        @apply bg-gradient-to-r from-primary to-primary-dark text-white px-8 py-3 rounded-full hover:shadow-lg hover:scale-105 transition-all duration-300 font-medium tracking-wide;
+        @apply bg-primary hover:bg-primary-dark text-white px-6 py-2.5 rounded-md font-medium tracking-wide transition-all duration-300 shadow-sm hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center;
     }
 
-    .btn-gold {
-        @apply bg-gradient-to-r from-gold to-gold-dark text-white px-8 py-3 rounded-full hover:shadow-glow hover:scale-105 transition-all duration-300 font-medium tracking-wide;
+    .btn-cta {
+        @apply bg-cta hover:bg-cta-hover text-white px-6 py-2.5 rounded-xl font-medium tracking-wide transition-all duration-300 shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center;
+    }
+
+    .btn-secondary {
+        @apply bg-white border border-gray-200 text-navy hover:bg-gray-50 hover:border-terracotta px-6 py-2.5 rounded-xl font-medium tracking-wide transition-all duration-300 shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center;
+    }
+    
+    .btn-accent {
+        @apply bg-terracotta hover:bg-terracotta-light text-white px-6 py-2.5 rounded-xl font-medium tracking-wide transition-all duration-300 shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center;
     }
 
     .card-hover {
-        @apply hover:-translate-y-2 hover:shadow-2xl transition-all duration-500 ease-out;
+        @apply hover:-translate-y-1 hover:shadow-lg transition-all duration-300 ease-out border border-transparent hover:border-gray-100;
     }
 }

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FaBars, FaTimes, FaUserCircle, FaSignOutAlt } from 'react-icons/fa';
-import logo from '../assets/logo.png';
 import authService from '../services/authService';
 
 const Navbar = () => {
@@ -11,21 +10,14 @@ const Navbar = () => {
     const location = useLocation();
     const navigate = useNavigate();
 
-    // Handle scroll effect
     useEffect(() => {
         const handleScroll = () => {
-            if (window.scrollY > 50) {
-                setScrolled(true);
-            } else {
-                setScrolled(false);
-            }
+            setScrolled(window.scrollY > 20);
         };
-
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // Check auth status and close mobile menu on route change
     useEffect(() => {
         const currentUser = authService.getCurrentUser();
         setUser(currentUser);
@@ -40,118 +32,83 @@ const Navbar = () => {
 
     const navLinks = [
         { name: 'Home', path: '/' },
+        { name: 'Venues', path: '/halls' },
+        { name: 'How It Works', path: '/#how-it-works' },
         { name: 'About', path: '/about' },
-        { name: 'Halls', path: '/halls' },
-        { name: 'Policy', path: '/policy' },
-        { name: 'Contact', path: '/contact' },
     ];
 
     return (
-        <nav className={`fixed w-full z-50 transition-all duration-300  ${scrolled ? 'glass py-3 ' : 'bg-transparent text-black py-4'}`}>
-            <div className=" mx-auto px-8 flex justify-between items-center">
-                {/* Logo */}
-                <Link to="/" className="text-2xl font-playfair font-bold  flex items-center gap-2 group">
-                    <img src={logo} alt="RoyalVenue Logo" className="w-12 h-12 
-                    object-contain rounded-full border-2 border-gold shadow-glow" />
-                    <div className="flex flex-col">
-                        <span className="text-gradient-gold text-3xl tracking-wide group-hover:scale-105 transition-transform duration-300">Royal</span>
-                        <span className="text-xs text-gold-light tracking-[0.3em] uppercase transition-colors duration-300">Venue</span>
-                    </div>
+        <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm py-3' : 'bg-transparent py-5'}`}>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+                <Link to="/" className="flex items-center gap-2 group">
+                    <span className={`text-2xl font-bold tracking-widest uppercase transition-colors duration-300 ${scrolled ? 'text-navy' : 'text-navy'}`}>
+                        VENUORA
+                    </span>
                 </Link>
 
-                {/* Desktop Menu */}
-                <div className="hidden md:flex items-center gap-7">
+                <div className="hidden md:flex items-center space-x-8">
                     {navLinks.map((link) => (
                         <Link
                             key={link.name}
                             to={link.path}
-                            className={`text-sm font-medium tracking-wide hover:text-gold-light transition-colors duration-300 relative after:content-[''] after:absolute after:left-0 after:bottom-[-4px] after:w-0 after:h-[2px] after:bg-gold-light after:transition-all after:duration-300 hover:after:w-full ${scrolled ? 'text-text' : ''}`}
+                            className={`text-sm font-medium tracking-wide transition-colors duration-300 hover:text-terracotta ${scrolled ? 'text-navy' : 'text-navy'}`}
                         >
                             {link.name}
                         </Link>
                     ))}
+                </div>
 
+                <div className="hidden md:flex items-center gap-4">
                     {user ? (
                         <div className="flex items-center gap-3">
-                            <Link
-                                to="/dashboard"
-                                className="btn-gold text-sm shadow-lg flex items-center gap-2"
-                            >
-                                <FaUserCircle className="text-lg" />
+                            <Link to="/dashboard" className="text-sm font-medium text-navy hover:text-terracotta transition-colors flex items-center gap-2">
+                                <FaUserCircle className="text-lg text-terracotta" />
                                 Dashboard
                             </Link>
-                            <button
-                                onClick={handleLogout}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-red-500 hover:bg-red-600 rounded-full transition-all duration-300 text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:scale-105"
-                                title="Logout"
-                            >
-                                <FaSignOutAlt className="text-base" />
+                            <button onClick={handleLogout} className="text-sm font-medium text-gray-500 hover:text-red-500 transition-colors flex items-center gap-2 ml-4" title="Logout">
+                                <FaSignOutAlt />
                                 <span>Logout</span>
                             </button>
                         </div>
                     ) : (
-                        <>
-                            <Link to="/login" className={`px-6 py-2 border rounded-full transition-all duration-300 text-sm font-medium hover:shadow-glow hover:scale-105 ${scrolled ? 'border-gold text-gold hover:bg-gold hover:text-white' : 'border-white/50  hover:bg-white hover:text-gold'}`}>
-                                Login
-                            </Link>
-                            <Link to="/register" className="btn-gold text-sm shadow-lg">
-                                Sign Up
-                            </Link>
-                        </>
+                        <div className="flex items-center gap-4">
+                            <Link to="/login" className="text-sm font-medium text-navy hover:text-terracotta transition-colors">Login</Link>
+                            <Link to="/register" className="btn-cta">Get Started</Link>
+                        </div>
                     )}
                 </div>
 
-                {/* Mobile Menu Button */}
-                <button
-                    className="md:hidden text-2xl text-gold-light focus:outline-none"
-                    onClick={() => setIsOpen(!isOpen)}
-                >
+                <button className={`md:hidden text-2xl focus:outline-none transition-colors ${scrolled ? 'text-navy' : 'text-navy'}`} onClick={() => setIsOpen(!isOpen)}>
                     {isOpen ? <FaTimes /> : <FaBars />}
                 </button>
             </div>
 
-            {/* Mobile Menu Overlay */}
-            <div className={`md:hidden absolute top-full left-0 w-full bg-white/95 backdrop-blur-md shadow-lg transition-all duration-300 ease-in-out overflow-hidden ${isOpen ? 'max-h-screen py-6' : 'max-h-0 py-0'}`}>
-                <div className="flex flex-col items-center gap-6">
+            <div className={`md:hidden absolute top-full left-0 w-full bg-white border-b border-gray-100 shadow-lg transition-all duration-300 ease-in-out overflow-hidden ${isOpen ? 'max-h-screen py-4' : 'max-h-0 py-0'}`}>
+                <div className="flex flex-col items-center gap-4 px-4">
                     {navLinks.map((link) => (
-                        <Link
-                            key={link.name}
-                            to={link.path}
-                            className="text-text text-lg font-medium hover:text-gold transition-colors"
-                        >
+                        <Link key={link.name} to={link.path} className="w-full text-center py-2 text-navy text-sm font-medium hover:text-terracotta transition-colors">
                             {link.name}
                         </Link>
                     ))}
-                    <div className="flex flex-col gap-4 w-full px-8 mt-4">
-                        {user ? (
-                            <>
-                                <Link
-                                    to="/dashboard"
-                                    className="w-full py-3 text-center btn-gold shadow-md flex items-center justify-center gap-2"
-                                >
-                                    <FaUserCircle /> Dashboard
-                                </Link>
-                                <button
-                                    onClick={handleLogout}
-                                    className="w-full py-3 text-center bg-red-500 hover:bg-red-600 rounded-full transition-all duration-300 font-semibold text-white shadow-lg flex items-center justify-center gap-2"
-                                >
-                                    <FaSignOutAlt /> Logout
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <Link to="/login" className="w-full py-3 text-center border border-gold text-gold rounded-full hover:bg-gold hover:text-white transition-all font-medium">
-                                    Login
-                                </Link>
-                                <Link to="/register" className="w-full py-3 text-center btn-gold shadow-md">
-                                    Sign Up
-                                </Link>
-                            </>
-                        )}
-                    </div>
+                    <div className="w-full h-px bg-gray-100 my-2" />
+                    {user ? (
+                        <div className="w-full flex flex-col gap-3">
+                            <Link to="/dashboard" className="w-full py-2.5 text-center btn-secondary flex items-center justify-center gap-2">
+                                <FaUserCircle /> Dashboard
+                            </Link>
+                            <button onClick={handleLogout} className="w-full py-2.5 text-center text-red-500 border border-red-100 rounded-xl hover:bg-red-50 transition-colors flex items-center justify-center gap-2 text-sm font-medium">
+                                <FaSignOutAlt /> Logout
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="w-full flex flex-col gap-3">
+                            <Link to="/login" className="w-full py-2.5 text-center btn-secondary">Login</Link>
+                            <Link to="/register" className="w-full py-2.5 text-center btn-cta">Get Started</Link>
+                        </div>
+                    )}
                 </div>
             </div>
-        </nav >
+        </nav>
     );
 };
 
