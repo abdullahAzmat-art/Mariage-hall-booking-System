@@ -9,7 +9,7 @@ const categories = [
     },
     {
         title: "Corporate",
-        image: "https://images.unsplash.com/photo-1540575467068-1e5db6a66e4d?w=800&q=80",
+        image: "https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&q=80",
         link: "/halls?category=corporate"
     },
     {
@@ -21,7 +21,7 @@ const categories = [
 
 const Categories = () => {
     return (
-        <section className="py-24 bg-white">
+        <section id="categories" className="py-24 bg-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center mb-16">
                     <span className="text-terracotta uppercase tracking-[0.2em] text-sm font-bold">Categories</span>

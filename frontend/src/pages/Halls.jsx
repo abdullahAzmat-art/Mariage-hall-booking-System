@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { gsap } from 'gsap';
 import HallCard from '../components/HallCard';
 import { FaSearch, FaMapMarkerAlt, FaMoneyBillWave } from 'react-icons/fa';
@@ -6,11 +7,22 @@ import hallService from '../services/hallService';
 
 const Halls = () => {
     const containerRef = useRef(null);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchParams] = useSearchParams();
+    const urlSearch = searchParams.get('search') || searchParams.get('location') || '';
+    const urlCategory = searchParams.get('category') || '';
+
+    const [searchTerm, setSearchTerm] = useState(urlSearch || urlCategory);
     const [selectedLocation, setSelectedLocation] = useState('all');
     const [priceRange, setPriceRange] = useState({ min: 0, max: 100000 });
     const [halls, setHalls] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const query = searchParams.get('search') || searchParams.get('location') || searchParams.get('category') || '';
+        if (query) {
+            setSearchTerm(query);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         const fetchHalls = async () => {

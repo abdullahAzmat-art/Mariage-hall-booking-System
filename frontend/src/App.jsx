@@ -21,6 +21,20 @@ const NotFound = () => <div className="p-20 text-center text-2xl">404 - Page Not
 function AppRoutes() {
   const location = useLocation();
 
+  React.useEffect(() => {
+    if (location.hash) {
+      const elementId = location.hash.replace('#', '');
+      const element = document.getElementById(elementId);
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [location]);
+
   return (
     <PageTransition>
       <Routes location={location}>

@@ -1,13 +1,16 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { FaStar } from 'react-icons/fa';
-import { Link } from 'react-router-dom';
+import { FaStar, FaSearch } from 'react-icons/fa';
+import { Link, useNavigate } from 'react-router-dom';
 import TrustBar from '../components/TrustBar';
 import FeaturedVenues from '../components/FeaturedVenues';
 import HowItWorks from '../components/HowItWorks';
 import WhyVenuora from '../components/WhyVenuora';
 import Categories from '../components/Categories';
+import ExperienceAmenities from '../components/ExperienceAmenities';
+import FAQSection from '../components/FAQSection';
+import NewsletterSection from '../components/NewsletterSection';
 import Testimonials from '../components/Testimonials';
 import CTABanner from '../components/CTABanner';
 
@@ -15,6 +18,21 @@ gsap.registerPlugin(ScrollTrigger);
 
 const Home = () => {
     const heroRef = useRef(null);
+    const navigate = useNavigate();
+    const [searchLocation, setSearchLocation] = useState('');
+    const [searchGuests, setSearchGuests] = useState('');
+
+    const handleSearch = (e) => {
+        e.preventDefault();
+        const params = new URLSearchParams();
+        if (searchLocation.trim()) {
+            params.append('search', searchLocation.trim());
+        }
+        if (searchGuests.trim()) {
+            params.append('guests', searchGuests.trim());
+        }
+        navigate(`/halls${params.toString() ? `?${params.toString()}` : ''}`);
+    };
 
     useEffect(() => {
         const heroCtx = gsap.context(() => {
@@ -93,19 +111,32 @@ const Home = () => {
                             </p>
                             
                             {/* Quick Search Widget */}
-                            <div className="bg-white p-3 rounded-2xl shadow-lg border border-gray-100 flex flex-col md:flex-row gap-3">
+                            <form onSubmit={handleSearch} className="bg-white p-3 rounded-2xl shadow-lg border border-gray-100 flex flex-col md:flex-row gap-3">
                                 <div className="flex-1 px-4 py-2 bg-gray-50 rounded-xl border border-transparent focus-within:border-gold/50 focus-within:bg-white transition-all">
-                                    <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Location</label>
-                                    <input type="text" placeholder="Where is your event?" className="w-full bg-transparent outline-none text-plum text-sm font-medium placeholder-gray-400" />
+                                    <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Location / Venue</label>
+                                    <input 
+                                        type="text" 
+                                        value={searchLocation}
+                                        onChange={(e) => setSearchLocation(e.target.value)}
+                                        placeholder="Where is your event?" 
+                                        className="w-full bg-transparent outline-none text-plum text-sm font-medium placeholder-gray-400" 
+                                    />
                                 </div>
                                 <div className="flex-1 px-4 py-2 bg-gray-50 rounded-xl border border-transparent focus-within:border-gold/50 focus-within:bg-white transition-all">
                                     <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Guests</label>
-                                    <input type="number" placeholder="How many?" className="w-full bg-transparent outline-none text-plum text-sm font-medium placeholder-gray-400" />
+                                    <input 
+                                        type="number" 
+                                        value={searchGuests}
+                                        onChange={(e) => setSearchGuests(e.target.value)}
+                                        placeholder="How many?" 
+                                        className="w-full bg-transparent outline-none text-plum text-sm font-medium placeholder-gray-400" 
+                                    />
                                 </div>
-                                <Link to="/halls" className="btn-primary py-4 px-8 md:px-10 rounded-xl h-full shadow-md text-center">
-                                    Search
-                                </Link>
-                            </div>
+                                <button type="submit" className="btn-primary py-4 px-8 md:px-10 rounded-xl h-full shadow-md text-center flex items-center justify-center gap-2">
+                                    <FaSearch className="text-sm" />
+                                    <span>Search</span>
+                                </button>
+                            </form>
                             
                             {/* Social Proof */}
                             <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-4 text-sm text-gray-500 font-medium">
@@ -144,11 +175,14 @@ const Home = () => {
             </section>
 
             <TrustBar />
+            <Categories />
             <FeaturedVenues />
+            <ExperienceAmenities />
             <HowItWorks />
             <WhyVenuora />
-            <Categories />
             <Testimonials />
+            <FAQSection />
+            <NewsletterSection />
             <CTABanner />
         </div>
     );
