@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { gsap } from 'gsap';
 import HallCard from '../components/HallCard';
 import { 
     FaSearch, 
     FaMapMarkerAlt, 
-    FaMoneyBillWave, 
-    FaFilter, 
-    FaSortAmountDown, 
     FaUsers, 
+    FaSlidersH,
     FaTimes,
-    FaArrowRight
+    FaArrowRight,
+    FaCheck,
+    FaChevronDown
 } from 'react-icons/fa';
 import hallService from '../services/hallService';
 
@@ -29,8 +29,11 @@ const Halls = () => {
     const [sortBy, setSortBy] = useState('featured');
     const [priceRange, setPriceRange] = useState({ min: 0, max: 200000 });
     const [maxPossiblePrice, setMaxPossiblePrice] = useState(200000);
+    const [isPriceDropdownOpen, setIsPriceDropdownOpen] = useState(false);
     const [halls, setHalls] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const priceDropdownRef = useRef(null);
 
     // Sync state with URL params
     useEffect(() => {
@@ -39,6 +42,17 @@ const Halls = () => {
         if (query) setSearchTerm(query);
         if (cat) setSelectedCategory(cat);
     }, [searchParams]);
+
+    // Close price dropdown on click outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (priceDropdownRef.current && !priceDropdownRef.current.contains(event.target)) {
+                setIsPriceDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Fetch halls data
     useEffect(() => {
@@ -108,7 +122,7 @@ const Halls = () => {
         if (sortBy === 'price-high') return priceB - priceA;
         if (sortBy === 'rating') return ratingB - ratingA;
         if (sortBy === 'capacity') return (parseInt(b.capacity) || 0) - (parseInt(a.capacity) || 0);
-        return (b.featured ? 1 : 0) - (a.featured ? 1 : 0); // default 'featured'
+        return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
     });
 
     // GSAP Animate Cards
@@ -116,10 +130,10 @@ const Halls = () => {
         if (!loading) {
             const ctx = gsap.context(() => {
                 gsap.from(".hall-card-wrap", {
-                    y: 30,
+                    y: 25,
                     opacity: 0,
-                    duration: 0.5,
-                    stagger: 0.08,
+                    duration: 0.45,
+                    stagger: 0.07,
                     ease: "power2.out"
                 });
             }, containerRef);
@@ -158,7 +172,7 @@ const Halls = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 
                 {/* Header Banner */}
-                <div className="text-center max-w-3xl mx-auto mb-12">
+                <div className="text-center max-w-3xl mx-auto mb-10">
                     <span className="text-terracotta uppercase tracking-[0.2em] text-xs font-bold bg-terracotta/10 px-4 py-1.5 rounded-full inline-block mb-3">
                         Curated Directory
                     </span>
@@ -166,47 +180,34 @@ const Halls = () => {
                         Discover Extraordinary <span className="text-gradient-gold">Venues</span>
                     </h1>
                     <p className="text-body text-base sm:text-lg mt-3 leading-relaxed">
-                        Explore handpicked marriage halls, executive banquet spaces, and luxury open-air lawns across Pakistan.
+                        Handpicked marriage halls, executive banquet spaces, and luxury open-air lawns.
                     </p>
                 </div>
 
-                {/* Filter & Search Suite */}
-                <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-gray-100 mb-12 relative z-10">
-                    
-                    {/* Category Filter Pills */}
-                    <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none border-b border-gray-100">
-                        {categories.map((cat) => (
-                            <button
-                                key={cat.id}
-                                onClick={() => setSelectedCategory(cat.id)}
-                                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all duration-300 ${
-                                    selectedCategory === cat.id
-                                        ? 'bg-terracotta text-white shadow-md'
-                                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-navy'
-                                }`}
-                            >
-                                {cat.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Filter Inputs Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
+                {/* LUXURY SEARCH CAPSULE (Airbnb Style) */}
+                <div className="max-w-4xl mx-auto mb-10">
+                    <div className="bg-white rounded-2xl md:rounded-full p-2.5 sm:p-3 shadow-xl border border-gray-200/80 flex flex-col md:flex-row items-center gap-2 md:gap-0 md:divide-x divide-gray-100 transition-all focus-within:ring-2 focus-within:ring-terracotta/20 focus-within:border-terracotta/40">
                         
-                        {/* Search Input */}
-                        <div className="relative group">
-                            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-terracotta text-sm transition-colors" />
-                            <input
-                                type="text"
-                                placeholder="Search by name or keyword..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full h-12 pl-11 pr-9 rounded-2xl border border-gray-200 bg-gray-50/50 text-navy text-xs font-medium focus:bg-white focus:outline-none focus:border-terracotta focus:ring-2 focus:ring-terracotta/20 transition-all placeholder-gray-400"
-                            />
+                        {/* Search Name / Keyword */}
+                        <div className="flex-1 w-full px-4 py-2 flex items-center gap-3">
+                            <FaSearch className="text-terracotta text-sm shrink-0" />
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                    Search
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="Hall name or keyword..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full bg-transparent text-navy font-semibold text-sm outline-none placeholder-gray-400"
+                                />
+                            </div>
                             {searchTerm && (
                                 <button
                                     onClick={() => setSearchTerm('')}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                                    className="text-gray-400 hover:text-navy p-1 text-xs"
+                                    aria-label="Clear search"
                                 >
                                     <FaTimes />
                                 </button>
@@ -214,107 +215,170 @@ const Halls = () => {
                         </div>
 
                         {/* Location Dropdown */}
-                        <div className="relative group">
-                            <FaMapMarkerAlt className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-terracotta text-sm transition-colors z-10 pointer-events-none" />
-                            <select
-                                value={selectedLocation}
-                                onChange={(e) => setSelectedLocation(e.target.value)}
-                                className="w-full h-12 pl-11 pr-8 rounded-2xl border border-gray-200 bg-gray-50/50 text-navy text-xs font-medium focus:bg-white focus:outline-none focus:border-terracotta focus:ring-2 focus:ring-terracotta/20 transition-all appearance-none cursor-pointer"
-                            >
-                                <option value="all">All Locations / Cities</option>
-                                {uniqueLocations.filter(loc => loc !== 'all').map((loc) => (
-                                    <option key={loc} value={loc}>
-                                        {loc}
-                                    </option>
-                                ))}
-                            </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                </svg>
+                        <div className="flex-1 w-full px-4 py-2 flex items-center gap-3">
+                            <FaMapMarkerAlt className="text-terracotta text-sm shrink-0" />
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                    Location
+                                </label>
+                                <select
+                                    value={selectedLocation}
+                                    onChange={(e) => setSelectedLocation(e.target.value)}
+                                    className="w-full bg-transparent text-navy font-semibold text-sm outline-none cursor-pointer appearance-none"
+                                >
+                                    <option value="all">All Cities / Areas</option>
+                                    {uniqueLocations.filter(loc => loc !== 'all').map((loc) => (
+                                        <option key={loc} value={loc}>
+                                            {loc}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 
-                        {/* Capacity Dropdown */}
-                        <div className="relative group">
-                            <FaUsers className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-terracotta text-sm transition-colors z-10 pointer-events-none" />
-                            <select
-                                value={selectedCapacity}
-                                onChange={(e) => setSelectedCapacity(e.target.value)}
-                                className="w-full h-12 pl-11 pr-8 rounded-2xl border border-gray-200 bg-gray-50/50 text-navy text-xs font-medium focus:bg-white focus:outline-none focus:border-terracotta focus:ring-2 focus:ring-terracotta/20 transition-all appearance-none cursor-pointer"
-                            >
-                                <option value="all">Any Guest Capacity</option>
-                                <option value="small">Intimate (Up to 300 guests)</option>
-                                <option value="medium">Medium (300 - 700 guests)</option>
-                                <option value="large">Grand (700 - 1,200 guests)</option>
-                                <option value="grand">Mega Gala (1,200+ guests)</option>
-                            </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                </svg>
+                        {/* Guest Capacity */}
+                        <div className="flex-1 w-full px-4 py-2 flex items-center gap-3">
+                            <FaUsers className="text-terracotta text-sm shrink-0" />
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                    Capacity
+                                </label>
+                                <select
+                                    value={selectedCapacity}
+                                    onChange={(e) => setSelectedCapacity(e.target.value)}
+                                    className="w-full bg-transparent text-navy font-semibold text-sm outline-none cursor-pointer appearance-none"
+                                >
+                                    <option value="all">Any Capacity</option>
+                                    <option value="small">Intimate (≤ 300)</option>
+                                    <option value="medium">Medium (300 - 700)</option>
+                                    <option value="large">Grand (700 - 1200)</option>
+                                    <option value="grand">Mega (1200+)</option>
+                                </select>
                             </div>
                         </div>
 
-                        {/* Sort By Dropdown */}
-                        <div className="relative group">
-                            <FaSortAmountDown className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-terracotta text-sm transition-colors z-10 pointer-events-none" />
+                        {/* Action CTA Button */}
+                        <div className="w-full md:w-auto p-1">
+                            <button
+                                onClick={() => {}}
+                                className="w-full md:w-auto h-12 px-6 rounded-xl md:rounded-full btn-cta font-bold text-xs uppercase tracking-wider shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                            >
+                                <FaSearch className="text-xs" />
+                                <span>Explore</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* FILTER RIBBON & CONTROLS */}
+                <div className="flex flex-col lg:flex-row items-center justify-between gap-4 mb-10 pb-6 border-b border-gray-200/60">
+                    
+                    {/* Occasion Category Pills */}
+                    <div className="flex items-center gap-2 overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0 scrollbar-none">
+                        {categories.map((cat) => (
+                            <button
+                                key={cat.id}
+                                onClick={() => setSelectedCategory(cat.id)}
+                                className={`px-4 py-2 rounded-full text-xs font-bold tracking-wide whitespace-nowrap transition-all duration-300 ${
+                                    selectedCategory === cat.id
+                                        ? 'bg-navy text-white shadow-sm'
+                                        : 'bg-white border border-gray-200 text-gray-600 hover:border-navy hover:text-navy'
+                                }`}
+                            >
+                                {cat.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Right Tools: Price Slider Popover & Sort Dropdown */}
+                    <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
+                        
+                        {/* Price Dropdown Button */}
+                        <div className="relative" ref={priceDropdownRef}>
+                            <button
+                                onClick={() => setIsPriceDropdownOpen(!isPriceDropdownOpen)}
+                                className={`px-4 py-2 rounded-full text-xs font-bold border transition-all flex items-center gap-2 ${
+                                    priceRange.max !== maxPossiblePrice
+                                        ? 'bg-terracotta/10 border-terracotta text-terracotta'
+                                        : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+                                }`}
+                            >
+                                <FaSlidersH className="text-[11px]" />
+                                <span>
+                                    {priceRange.max !== maxPossiblePrice
+                                        ? `Max: Rs ${(priceRange.max / 1000).toFixed(0)}k`
+                                        : 'Budget'}
+                                </span>
+                                <FaChevronDown className={`text-[9px] transition-transform ${isPriceDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {/* Dropdown Card */}
+                            {isPriceDropdownOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl p-5 shadow-2xl border border-gray-100 z-50 animate-fadeIn">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-xs font-bold uppercase tracking-wider text-navy">
+                                            Max Venue Price
+                                        </span>
+                                        <span className="text-xs font-bold text-terracotta bg-terracotta/10 px-2 py-0.5 rounded-full">
+                                            Rs {priceRange.max.toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max={maxPossiblePrice}
+                                        step="5000"
+                                        value={priceRange.max}
+                                        onChange={(e) => setPriceRange({ ...priceRange, max: parseInt(e.target.value) })}
+                                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terracotta mb-4"
+                                    />
+                                    <div className="flex items-center justify-between text-[11px] text-gray-400">
+                                        <span>Rs 0</span>
+                                        <span>Rs {maxPossiblePrice.toLocaleString()}</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setIsPriceDropdownOpen(false)}
+                                        className="w-full mt-4 py-2 bg-navy text-white text-xs font-bold rounded-xl hover:bg-navy-dark transition-colors"
+                                    >
+                                        Apply Budget
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Sort Dropdown */}
+                        <div className="relative">
                             <select
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value)}
-                                className="w-full h-12 pl-11 pr-8 rounded-2xl border border-gray-200 bg-gray-50/50 text-navy text-xs font-medium focus:bg-white focus:outline-none focus:border-terracotta focus:ring-2 focus:ring-terracotta/20 transition-all appearance-none cursor-pointer"
+                                className="px-4 py-2 rounded-full text-xs font-bold bg-white border border-gray-200 text-gray-700 hover:border-gray-300 outline-none cursor-pointer appearance-none pr-7 transition-all"
                             >
-                                <option value="featured">Sort by: Featured First</option>
-                                <option value="rating">Sort by: Highest Rated</option>
+                                <option value="featured">Sort: Featured</option>
+                                <option value="rating">Sort: Highest Rated</option>
                                 <option value="price-low">Price: Low to High</option>
                                 <option value="price-high">Price: High to Low</option>
                                 <option value="capacity">Capacity: Largest First</option>
                             </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                </svg>
-                            </div>
+                            <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 pointer-events-none" />
                         </div>
+
+                        {/* Reset Filters */}
+                        {hasActiveFilters && (
+                            <button
+                                onClick={clearAllFilters}
+                                className="text-xs text-terracotta font-bold hover:underline whitespace-nowrap pl-1"
+                            >
+                                Clear all
+                            </button>
+                        )}
                     </div>
+                </div>
 
-                    {/* Price Range Slider & Clear Filters */}
-                    <div className="mt-6 pt-5 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div className="w-full md:w-1/2 flex items-center gap-4">
-                            <span className="text-xs font-bold text-gray-600 whitespace-nowrap uppercase tracking-wider">
-                                Max Price:
-                            </span>
-                            <input
-                                type="range"
-                                min="0"
-                                max={maxPossiblePrice}
-                                step="5000"
-                                value={priceRange.max}
-                                onChange={(e) => setPriceRange({ ...priceRange, max: parseInt(e.target.value) })}
-                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-terracotta"
-                            />
-                            <span className="text-xs font-bold text-terracotta whitespace-nowrap bg-terracotta/10 px-3 py-1 rounded-full border border-terracotta/20">
-                                Rs {priceRange.max.toLocaleString()}
-                            </span>
-                        </div>
-
-                        {/* Filter Status / Reset */}
-                        <div className="flex items-center gap-3">
-                            <span className="text-xs text-gray-500 font-medium">
-                                Showing <strong className="text-navy">{sortedHalls.length}</strong> of {halls.length} venues
-                            </span>
-
-                            {hasActiveFilters && (
-                                <button
-                                    onClick={clearAllFilters}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs bg-gray-100 hover:bg-terracotta hover:text-white text-gray-700 font-bold rounded-xl transition-all duration-300"
-                                >
-                                    <FaTimes className="text-[10px]" />
-                                    <span>Reset Filters</span>
-                                </button>
-                            )}
-                        </div>
-                    </div>
+                {/* Venue Count Indicator */}
+                <div className="flex items-center justify-between mb-6">
+                    <p className="text-sm font-semibold text-gray-500">
+                        Showing <span className="text-navy font-bold">{sortedHalls.length}</span> verified {sortedHalls.length === 1 ? 'venue' : 'venues'}
+                    </p>
                 </div>
 
                 {/* Halls Grid Display */}
@@ -350,7 +414,7 @@ const Halls = () => {
                             No matching venues found
                         </h3>
                         <p className="text-body text-sm mb-8 leading-relaxed max-w-md mx-auto">
-                            We couldn't find any halls matching your search and filter criteria. Try adjusting the price range or clearing filters.
+                            We couldn't find any halls matching your search and filter criteria. Try adjusting the budget or clearing filters.
                         </p>
                         <button
                             onClick={clearAllFilters}
