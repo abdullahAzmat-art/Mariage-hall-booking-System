@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import CustomerDashboard from '../components/CustomerDashboard';
 import AdminDashboard from '../components/AdminDashboard';
 import ManagerDashboard from '../components/ManagerDashboard';
-import { FaSignOutAlt } from 'react-icons/fa';
+import { FaSignOutAlt, FaHome, FaUser, FaBell } from 'react-icons/fa';
 import authService from '../services/authService';
 
 const Dashboard = () => {
@@ -26,25 +26,34 @@ const Dashboard = () => {
 
     if (!user) return null;
 
-    return (
-        <div className="bg-gray-50 min-h-screen py-12">
-            <div className="container mx-auto px-4">
-                <div className="flex flex-col md:flex-row justify-between items-center mb-8">
-                    <div>
-                        <h1 className="text-3xl font-bold text-text">Dashboard</h1>
-                        <p className="text-gray-500">Welcome back, {user.name}</p>
-                    </div>
+    const roleLabel = user.role === 'admin' ? 'Administrator' : user.role === 'manager' ? 'Hall Manager' : 'Member';
+    const roleBg = user.role === 'admin' ? 'bg-navy text-white' : user.role === 'manager' ? 'bg-terracotta text-white' : 'bg-gray-100 text-gray-700';
 
-                    <div className="flex items-center space-x-4 mt-4 md:mt-0">
-                        <button
-                            onClick={handleLogout}
-                            className="flex items-center text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg transition-colors"
-                        >
-                            <FaSignOutAlt className="mr-2" /> Logout
-                        </button>
+    return (
+        <div className="bg-ivory-warm min-h-screen font-body">
+        
+       
+
+            {/* Dashboard Header */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl sm:text-4xl font-playfair font-bold text-navy capitalize">
+                            {user.role} Dashboard
+                        </h1>
+                        <p className="text-gray-500 mt-1.5 font-medium">
+                            Welcome back, <span className="text-terracotta">{user.name}</span>! Here's what's happening today.
+                        </p>
+                    </div>
+                    <div className={`px-5 py-2 rounded-full text-sm font-bold shadow-sm self-start sm:self-auto flex items-center gap-2 ${roleBg}`}>
+                        <FaUser className="text-xs opacity-80" />
+                        {roleLabel}
                     </div>
                 </div>
+            </div>
 
+            {/* Dashboard Content */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
                 {user.role === 'admin' ? (
                     <AdminDashboard />
                 ) : user.role === 'manager' ? (

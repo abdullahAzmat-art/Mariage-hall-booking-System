@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { FaPlus, FaBuilding, FaMoneyBillWave, FaTrash, FaUpload, FaCheckCircle, FaClock, FaCalendarAlt, FaUtensils } from 'react-icons/fa';
+import { 
+    FaPlus, FaBuilding, FaMoneyBillWave, FaTrash, FaUpload, 
+    FaCheckCircle, FaClock, FaCalendarAlt, FaUtensils, FaTimesCircle, FaCommentAlt
+} from 'react-icons/fa';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import hallService from '../services/hallService';
@@ -27,13 +30,8 @@ const ManagerDashboard = () => {
     const [showFoodReviewModal, setShowFoodReviewModal] = useState(false);
     const [selectedBookingForFood, setSelectedBookingForFood] = useState(null);
     const [hallForm, setHallForm] = useState({
-        name: '',
-        location: '',
-        capacity: '',
-        price: '',
-        amenities: '',
-        description: '',
-        image: null
+        name: '', location: '', capacity: '', price: '',
+        amenities: '', description: '', image: null
     });
 
     useEffect(() => {
@@ -41,7 +39,7 @@ const ManagerDashboard = () => {
             fetchHalls();
         } else if (activeTab === 'bookings' || activeTab === 'payments') {
             fetchBookings();
-            fetchPayments(); // Also fetch payments to show commission status
+            fetchPayments();
         } else if (activeTab === 'commissions') {
             fetchPayments();
         }
@@ -116,7 +114,7 @@ const ManagerDashboard = () => {
                 await bookingService.updateBookingStatus(bookingId, 'completed');
                 toast.success('Booking marked as completed');
                 fetchBookings();
-                fetchPayments(); // Refresh payments after completing
+                fetchPayments();
             } catch (error) {
                 console.error('Complete error:', error);
                 toast.error(error.response?.data?.message || 'Failed to mark as complete');
@@ -175,13 +173,8 @@ const ManagerDashboard = () => {
             fetchHalls();
             setShowAddHallForm(false);
             setHallForm({
-                name: '',
-                location: '',
-                capacity: '',
-                price: '',
-                amenities: '',
-                description: '',
-                image: null
+                name: '', location: '', capacity: '', price: '',
+                amenities: '', description: '', image: null
             });
         } catch (error) {
             const message = error.response?.data?.message || 'Failed to create hall';
@@ -236,29 +229,7 @@ const ManagerDashboard = () => {
 
     const handleSaveAvailability = async () => {
         try {
-            const formData = new FormData();
-            // We need to send all existing data + new bookedDates
-            // Or better, update the backend to accept partial updates or just bookedDates
-            // For now, let's assume updateHall handles partial updates or we send what's needed.
-            // Actually, the current updateHall implementation expects a FormData with all fields if we use the same endpoint.
-            // However, we can just send the bookedDates if we modify the backend or use a specific endpoint.
-            // But to keep it simple and consistent with current backend:
-            // We will use a JSON payload if the backend supports it, but the controller uses req.body and req.file.
-            // Let's check updateHall in backend... it uses req.body.amenities etc.
-            // It does NOT require all fields to be present, it updates what is passed.
-            // EXCEPT image, which it checks.
-
-            // So we can just send bookedDates.
-            // But wait, the controller expects multipart/form-data because of the image upload middleware usually?
-            // If we send JSON, multer might not be involved or might pass it through.
-            // Let's try sending JSON first. If it fails, we'll use FormData.
-
-            // Actually, let's use the service.
-            // hallService.updateHall takes (id, hallData).
-            // We should check hallService.js to see how it sends data.
-
             await hallService.updateHall(selectedHallForAvailability._id, { bookedDates: availabilityDates });
-
             toast.success('Availability updated successfully');
             setShowAvailabilityModal(false);
             fetchHalls();
@@ -268,202 +239,171 @@ const ManagerDashboard = () => {
         }
     };
 
+    const totalRevenue = bookings.reduce((total, booking) => total + (booking.totalAmount || 0), 0);
+
+    const tabs = [
+        { id: 'bookings', label: 'Manage Bookings', icon: FaCalendarAlt },
+        { id: 'halls', label: 'Manage Halls', icon: FaBuilding },
+        { id: 'commissions', label: 'Commission Payments', icon: FaMoneyBillWave },
+        { id: 'payments', label: 'Payment Verification', icon: FaCheckCircle },
+    ];
+
+    const thCls = "px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500 text-left";
+    const tdCls = "px-4 py-4 text-sm text-gray-700";
+    const inputCls = "w-full h-12 px-4 rounded-xl border border-gray-200 bg-gray-50/50 text-navy text-sm font-medium focus:bg-white focus:outline-none focus:border-terracotta focus:ring-2 focus:ring-terracotta/20 transition-all placeholder-gray-400";
+
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-500">Total Bookings</h3>
-                        <FaBuilding className="text-primary text-xl" />
+            {/* ── Stats Row ── */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 border-l-4 border-l-navy flex items-center gap-5">
+                    <div className="w-12 h-12 rounded-xl bg-navy/10 text-navy flex items-center justify-center shrink-0">
+                        <FaBuilding className="text-xl" />
                     </div>
-                    <p className="text-3xl font-bold text-text">{bookings.length}</p>
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-0.5">Total Bookings</p>
+                        <p className="text-3xl font-playfair font-bold text-navy">{bookings.length}</p>
+                    </div>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-500">Active Halls</h3>
-                        <FaBuilding className="text-blue-500 text-xl" />
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 border-l-4 border-l-blue-500 flex items-center gap-5">
+                    <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <FaBuilding className="text-xl" />
                     </div>
-                    <p className="text-3xl font-bold text-text">{halls.length}</p>
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-0.5">Active Halls</p>
+                        <p className="text-3xl font-playfair font-bold text-navy">{halls.length}</p>
+                    </div>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-500">Revenue</h3>
-                        <FaMoneyBillWave className="text-green-500 text-xl" />
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 border-l-4 border-l-emerald-500 flex items-center gap-5">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                        <FaMoneyBillWave className="text-xl" />
                     </div>
-                    <p className="text-3xl font-bold text-text">Rs {bookings.reduce((total, booking) => total + (booking.totalAmount || 0), 0).toLocaleString()}</p>
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-0.5">Total Revenue</p>
+                        <p className="text-2xl font-playfair font-bold text-navy">Rs {totalRevenue.toLocaleString()}</p>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex space-x-4 overflow-x-auto pb-2">
-                <button
-                    onClick={() => setActiveTab('bookings')}
-                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'bookings' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Manage Bookings
-                </button>
-                <button
-                    onClick={() => setActiveTab('halls')}
-                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'halls' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Manage Halls
-                </button>
-                <button
-                    onClick={() => setActiveTab('commissions')}
-                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'commissions' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Commission Payments
-                </button>
-                <button
-                    onClick={() => setActiveTab('payments')}
-                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'payments' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Payment Verification
-                </button>
+            {/* ── Tab Navigation ── */}
+            <div className="bg-white rounded-2xl p-2 shadow-sm border border-gray-100 flex gap-1 overflow-x-auto scrollbar-none items-center">
+                {tabs.map(({ id, label, icon: Icon }) => (
+                    <button
+                        key={id}
+                        onClick={() => setActiveTab(id)}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 ${
+                            activeTab === id
+                                ? 'bg-navy text-white shadow-sm'
+                                : 'text-gray-500 hover:bg-gray-50 hover:text-navy'
+                        }`}
+                    >
+                        <Icon className="text-xs" />
+                        {label}
+                    </button>
+                ))}
                 <Link
-                    to={"/message"}
-                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'payments' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    to="/message"
+                    className="ml-auto mr-1 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap text-terracotta bg-terracotta/10 hover:bg-terracotta/20 transition-all duration-200"
                 >
-                    Message
+                    <FaCommentAlt className="text-xs" />
+                    Messages
                 </Link>
             </div>
 
-            <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6 min-h-[400px]">
+            {/* ── Content Panel ── */}
+            <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-6 sm:p-8 min-h-[500px]">
+                
+                {/* BOOKINGS */}
                 {activeTab === 'bookings' && (
                     <div>
-                        <h2 className="text-xl font-bold text-text mb-6">Manage Bookings</h2>
-                        <div className="overflow-x-auto">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1 h-7 bg-terracotta rounded-full" />
+                            <h2 className="text-xl font-playfair font-bold text-navy">Manage Bookings</h2>
+                        </div>
+                        <div className="overflow-x-auto rounded-2xl border border-gray-100">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-gray-600 font-medium">
-                                    <tr>
-                                        <th className="p-4">ID</th>
-                                        <th className="p-4">Customer</th>
-                                        <th className="p-4">Hall</th>
-                                        <th className="p-4">Date</th>
-                                        <th className="p-4">Total Amount</th>
-                                        <th className="p-4">Commission (5%)</th>
-                                        <th className="p-4">Status</th>
-                                        <th className="p-4">Commission Status</th>
-                                        <th className="p-4">Actions</th>
+                                <thead>
+                                    <tr className="bg-gray-50 border-b border-gray-100">
+                                        <th className={thCls}>ID</th>
+                                        <th className={thCls}>Customer</th>
+                                        <th className={thCls}>Hall</th>
+                                        <th className={thCls}>Date</th>
+                                        <th className={thCls}>Total Amount</th>
+                                        <th className={thCls}>Commission (5%)</th>
+                                        <th className={thCls}>Status</th>
+                                        <th className={thCls}>Com. Status</th>
+                                        <th className={thCls}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {bookings.length > 0 ? (
-                                        bookings.map((booking) => {
-                                            const commissionAmount = booking.totalAmount * 0.05;
-                                            const commissionPayment = payments.find(p => p.bookingId?._id === booking._id);
+                                    {bookings.length > 0 ? bookings.map((booking) => {
+                                        const commissionAmount = booking.totalAmount * 0.05;
+                                        const commissionPayment = payments.find(p => p.bookingId?._id === booking._id);
 
-                                            return (
-                                                <tr key={booking._id} className="hover:bg-gray-50">
-                                                    <td className="p-4">#{booking._id.slice(-6)}</td>
-                                                    <td className="p-4">{booking.customerId?.name || 'N/A'}</td>
-                                                    <td className="p-4">{booking.hallId?.name || 'N/A'}</td>
-                                                    <td className="p-4">{new Date(booking.eventDate).toLocaleDateString()}</td>
-                                                    <td className="p-4 font-bold text-green-600">Rs {(booking.totalAmount || 0).toLocaleString()}</td>
-                                                    <td className="p-4">
-                                                        {booking.status !== 'rejected' && booking.status !== 'payment_rejected' ? (
-                                                            <span className="font-bold text-primary">Rs {commissionAmount.toLocaleString()}</span>
-                                                        ) : (
-                                                            <span className="text-gray-400">-</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <span className={`px-2 py-1 rounded text-xs font-bold ${booking.status === 'completed' ? 'text-blue-600 bg-blue-100' :
-                                                            booking.status === 'approved' ? 'text-green-600 bg-green-100' :
-                                                                booking.status === 'rejected' ? 'text-red-600 bg-red-100' :
-                                                                    'text-yellow-600 bg-yellow-100'
-                                                            }`}>
-                                                            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        {booking.status === 'completed' ? (
-                                                            commissionPayment ? (
-                                                                commissionPayment.status === 'verified' ? (
-                                                                    <span className="px-2 py-1 rounded text-xs font-bold bg-green-100 text-green-700">
-                                                                        ✓ Verified
-                                                                    </span>
-                                                                ) : commissionPayment.status === 'rejected' ? (
-                                                                    <span className="px-2 py-1 rounded text-xs font-bold bg-red-100 text-red-700">
-                                                                        ✗ Rejected
-                                                                    </span>
-                                                                ) : commissionPayment.paymentProof ? (
-                                                                    <span className="px-2 py-1 rounded text-xs font-bold bg-blue-100 text-blue-700">
-                                                                        ⏳ Pending Review
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="px-2 py-1 rounded text-xs font-bold bg-orange-100 text-orange-700">
-                                                                        ⚠️ Payment Due
-                                                                    </span>
-                                                                )
+                                        return (
+                                            <tr key={booking._id} className="hover:bg-ivory-warm transition-colors">
+                                                <td className={tdCls + " font-medium"}>#{booking._id.slice(-6)}</td>
+                                                <td className={tdCls}>{booking.customerId?.name || 'N/A'}</td>
+                                                <td className={tdCls}>{booking.hallId?.name || 'N/A'}</td>
+                                                <td className={tdCls}>{new Date(booking.eventDate).toLocaleDateString()}</td>
+                                                <td className={tdCls + " font-bold text-emerald-600"}>Rs {(booking.totalAmount || 0).toLocaleString()}</td>
+                                                <td className={tdCls}>
+                                                    {booking.status !== 'rejected' && booking.status !== 'payment_rejected' ? (
+                                                        <span className="font-bold text-terracotta">Rs {commissionAmount.toLocaleString()}</span>
+                                                    ) : <span className="text-gray-400">-</span>}
+                                                </td>
+                                                <td className={tdCls}>
+                                                    <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold ${
+                                                        booking.status === 'completed' ? 'text-blue-700 bg-blue-100' :
+                                                        booking.status === 'approved' ? 'text-emerald-700 bg-emerald-100' :
+                                                        booking.status === 'rejected' ? 'text-red-700 bg-red-100' :
+                                                        'text-amber-700 bg-amber-100'
+                                                    }`}>
+                                                        {booking.status.replace(/_/g, ' ')}
+                                                    </span>
+                                                </td>
+                                                <td className={tdCls}>
+                                                    {booking.status === 'completed' ? (
+                                                        commissionPayment ? (
+                                                            commissionPayment.status === 'verified' ? (
+                                                                <span className="px-2.5 py-1 rounded-full text-[10px] uppercase font-bold bg-emerald-100 text-emerald-700 whitespace-nowrap">✓ Verified</span>
+                                                            ) : commissionPayment.status === 'rejected' ? (
+                                                                <span className="px-2.5 py-1 rounded-full text-[10px] uppercase font-bold bg-red-100 text-red-700 whitespace-nowrap">✗ Rejected</span>
+                                                            ) : commissionPayment.paymentProof ? (
+                                                                <span className="px-2.5 py-1 rounded-full text-[10px] uppercase font-bold bg-blue-100 text-blue-700 whitespace-nowrap">⏳ Pending Review</span>
                                                             ) : (
-                                                                <span className="px-2 py-1 rounded text-xs font-bold bg-red-100 text-red-700">
-                                                                    ✗ Not Created
-                                                                </span>
+                                                                <span className="px-2.5 py-1 rounded-full text-[10px] uppercase font-bold bg-orange-100 text-orange-700 whitespace-nowrap">⚠️ Payment Due</span>
                                                             )
                                                         ) : (
-                                                            <span className="text-gray-400">-</span>
+                                                            <span className="px-2.5 py-1 rounded-full text-[10px] uppercase font-bold bg-red-100 text-red-700 whitespace-nowrap">✗ Not Created</span>
+                                                        )
+                                                    ) : (
+                                                        <span className="text-gray-400 text-xs">-</span>
+                                                    )}
+                                                </td>
+                                                <td className={tdCls}>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {booking.status === 'pending' && (
+                                                            <>
+                                                                <button onClick={() => handleApprove(booking._id)} className="px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-colors">Accept</button>
+                                                                <button onClick={() => handleReject(booking._id)} className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-bold transition-colors">Reject</button>
+                                                            </>
                                                         )}
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <div className="flex space-x-2">
-                                                            {booking.status === 'pending' && (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => handleApprove(booking._id)}
-                                                                        className="text-green-600 hover:bg-green-50 px-3 py-1 rounded text-sm font-bold border border-green-200 mr-2"
-                                                                        title="Accept Booking Request"
-                                                                    >
-                                                                        Accept
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleReject(booking._id)}
-                                                                        className="text-red-600 hover:bg-red-50 px-3 py-1 rounded text-sm font-bold border border-red-200"
-                                                                        title="Reject Booking Request"
-                                                                    >
-                                                                        Reject
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                            {booking.customFoodStatus === 'pending' && (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setSelectedBookingForFood(booking);
-                                                                        setShowFoodReviewModal(true);
-                                                                    }}
-                                                                    className="text-purple-600 hover:bg-purple-50 px-3 py-1 rounded text-sm font-bold"
-                                                                >
-                                                                    Review Food
-                                                                </button>
-                                                            )}
-                                                            {booking.status === 'approved' && (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => handleComplete(booking._id)}
-                                                                        className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded text-sm"
-                                                                    >
-                                                                        Complete
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                            {booking.status === 'rejected' && (
-                                                                <button
-                                                                    onClick={() => handleDeleteBooking(booking._id)}
-                                                                    className="text-red-600 hover:bg-red-50 px-3 py-1 rounded text-sm"
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    ) : (
-                                        <tr>
-                                            <td colSpan="9" className="p-4 text-center text-gray-500">
-                                                No bookings found
-                                            </td>
-                                        </tr>
+                                                        {booking.customFoodStatus === 'pending' && (
+                                                            <button onClick={() => { setSelectedBookingForFood(booking); setShowFoodReviewModal(true); }} className="px-3 py-1.5 bg-purple-50 text-purple-600 hover:bg-purple-100 rounded-lg text-xs font-bold transition-colors">Review Food</button>
+                                                        )}
+                                                        {booking.status === 'approved' && (
+                                                            <button onClick={() => handleComplete(booking._id)} className="px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors">Complete</button>
+                                                        )}
+                                                        {booking.status === 'rejected' && (
+                                                            <button onClick={() => handleDeleteBooking(booking._id)} className="px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg text-xs font-bold transition-colors">Delete</button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    }) : (
+                                        <tr><td colSpan="9" className="p-8 text-center text-gray-400">No bookings found</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -471,285 +411,232 @@ const ManagerDashboard = () => {
                     </div>
                 )}
 
+                {/* HALLS */}
                 {activeTab === 'halls' && (
                     <div>
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-text">Manage Halls</h2>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-1 h-7 bg-terracotta rounded-full" />
+                                <h2 className="text-xl font-playfair font-bold text-navy">Manage Halls</h2>
+                            </div>
                             <button
                                 onClick={() => setShowAddHallForm(!showAddHallForm)}
-                                className="btn-primary flex items-center px-4 py-2 text-sm"
+                                className="btn-cta px-5 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2"
                             >
-                                <FaPlus className="mr-2" /> {showAddHallForm ? 'Cancel' : 'Add New Hall'}
+                                <FaPlus className={showAddHallForm ? 'rotate-45 transition-transform' : 'transition-transform'} />
+                                {showAddHallForm ? 'Cancel' : 'Add New Hall'}
                             </button>
                         </div>
 
-                        {showAddHallForm ? (
-                            <form onSubmit={handleCreateHall} className="max-w-2xl space-y-4 mb-8">
+                        {showAddHallForm && (
+                            <form onSubmit={handleCreateHall} className="bg-gray-50/50 border border-gray-100 rounded-2xl p-6 mb-8">
+                                <h3 className="font-bold text-navy mb-4">Create New Hall</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Hall Name</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
-                                            value={hallForm.name}
-                                            onChange={(e) => setHallForm({ ...hallForm, name: e.target.value })}
-                                        />
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">Hall Name</label>
+                                        <input type="text" required className={inputCls} value={hallForm.name} onChange={(e) => setHallForm({ ...hallForm, name: e.target.value })} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
-                                            value={hallForm.location}
-                                            onChange={(e) => setHallForm({ ...hallForm, location: e.target.value })}
-                                        />
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">Location</label>
+                                        <input type="text" required className={inputCls} value={hallForm.location} onChange={(e) => setHallForm({ ...hallForm, location: e.target.value })} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
-                                        <input
-                                            type="number"
-                                            required
-                                            className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
-                                            value={hallForm.capacity}
-                                            onChange={(e) => setHallForm({ ...hallForm, capacity: e.target.value })}
-                                        />
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">Capacity</label>
+                                        <input type="number" required className={inputCls} value={hallForm.capacity} onChange={(e) => setHallForm({ ...hallForm, capacity: e.target.value })} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Price per Seat</label>
-                                        <input
-                                            type="number"
-                                            required
-                                            className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
-                                            value={hallForm.price}
-                                            onChange={(e) => setHallForm({ ...hallForm, price: e.target.value })}
-                                        />
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">Price per Seat</label>
+                                        <input type="number" required className={inputCls} value={hallForm.price} onChange={(e) => setHallForm({ ...hallForm, price: e.target.value })} />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">Amenities (comma separated)</label>
+                                        <input type="text" className={inputCls} placeholder="AC, Parking, WiFi" value={hallForm.amenities} onChange={(e) => setHallForm({ ...hallForm, amenities: e.target.value })} />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">Hall Image</label>
+                                        <input type="file" required className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-600 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-terracotta/10 file:text-terracotta hover:file:bg-terracotta/20 cursor-pointer" onChange={(e) => setHallForm({ ...hallForm, image: e.target.files[0] })} />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">Description</label>
+                                        <textarea rows="4" className={`${inputCls} py-3 h-auto resize-none`} value={hallForm.description} onChange={(e) => setHallForm({ ...hallForm, description: e.target.value })}></textarea>
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Amenities (comma separated)</label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
-                                        placeholder="AC, Parking, WiFi"
-                                        value={hallForm.amenities}
-                                        onChange={(e) => setHallForm({ ...hallForm, amenities: e.target.value })}
-                                    />
+                                <div className="mt-6 flex justify-end">
+                                    <button type="submit" className="btn-cta px-8 py-3 rounded-xl font-bold text-sm">Create Hall</button>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Hall Image</label>
-                                    <input
-                                        type="file"
-                                        required
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
-                                        onChange={(e) => setHallForm({ ...hallForm, image: e.target.files[0] })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                                    <textarea
-                                        rows="4"
-                                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
-                                        value={hallForm.description}
-                                        onChange={(e) => setHallForm({ ...hallForm, description: e.target.value })}
-                                    ></textarea>
-                                </div>
-                                <button type="submit" className="btn-primary px-6 py-2">Create Hall</button>
                             </form>
-                        ) : null}
+                        )}
 
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto rounded-2xl border border-gray-100">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-gray-600 font-medium">
-                                    <tr>
-                                        <th className="p-4">Name</th>
-                                        <th className="p-4">Location</th>
-                                        <th className="p-4">Capacity</th>
-                                        <th className="p-4">Price</th>
-                                        <th className="p-4">Actions</th>
+                                <thead>
+                                    <tr className="bg-gray-50 border-b border-gray-100">
+                                        <th className={thCls}>Name</th>
+                                        <th className={thCls}>Location</th>
+                                        <th className={thCls}>Capacity</th>
+                                        <th className={thCls}>Price</th>
+                                        <th className={thCls}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {halls.map(hall => (
-                                        <tr key={hall._id} className="hover:bg-gray-50">
-                                            <td className="p-4 font-medium">{hall.name}</td>
-                                            <td className="p-4 text-gray-600">{hall.location}</td>
-                                            <td className="p-4">{hall.capacity}</td>
-                                            <td className="p-4">Rs {hall.price}</td>
-                                            <td className="p-4">
-                                                <button
-                                                    onClick={() => handleDeleteHall(hall._id)}
-                                                    className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors"
-                                                    title="Delete Hall"
-                                                >
-                                                    <FaTrash />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleAvailabilityClick(hall)}
-                                                    className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition-colors ml-2"
-                                                    title="Manage Availability"
-                                                >
-                                                    <FaCalendarAlt />
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedHallForMenu(hall);
-                                                        setShowMenuModal(true);
-                                                    }}
-                                                    className="text-purple-500 hover:bg-purple-50 p-2 rounded-full transition-colors ml-2"
-                                                    title="Manage Menu"
-                                                >
-                                                    <FaUtensils />
-                                                </button>
+                                        <tr key={hall._id} className="hover:bg-ivory-warm transition-colors">
+                                            <td className={tdCls + " font-semibold text-navy"}>{hall.name}</td>
+                                            <td className={tdCls}>{hall.location}</td>
+                                            <td className={tdCls}>
+                                                <span className="bg-gray-100 text-gray-700 text-xs font-bold px-2.5 py-1 rounded-full">{hall.capacity}</span>
+                                            </td>
+                                            <td className={tdCls + " font-bold text-terracotta"}>Rs {hall.price}</td>
+                                            <td className={tdCls}>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => handleDeleteHall(hall._id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Delete Hall"><FaTrash /></button>
+                                                    <button onClick={() => handleAvailabilityClick(hall)} className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-2 rounded-lg transition-colors" title="Manage Availability"><FaCalendarAlt /></button>
+                                                    <button onClick={() => { setSelectedHallForMenu(hall); setShowMenuModal(true); }} className="text-purple-500 hover:text-purple-700 hover:bg-purple-50 p-2 rounded-lg transition-colors" title="Manage Menu"><FaUtensils /></button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
+                                    {halls.length === 0 && !showAddHallForm && (
+                                        <tr><td colSpan="5" className="p-8 text-center text-gray-400">No halls found. Click "Add New Hall" to create one.</td></tr>
+                                    )}
                                 </tbody>
                             </table>
-                            {halls.length === 0 && !showAddHallForm && (
-                                <p className="text-center text-gray-500 py-4">No halls found. Click "Add New Hall" to create one.</p>
-                            )}
                         </div>
                     </div>
                 )}
 
+                {/* COMMISSIONS */}
                 {activeTab === 'commissions' && (
                     <div>
-                        <h2 className="text-xl font-bold text-text mb-6">Commission Payments</h2>
-                        <div className="space-y-4">
-                            {payments.length > 0 ? (
-                                payments.map((payment) => (
-                                    <div key={payment._id} className="border border-gray-200 rounded-lg p-6 bg-white">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1 h-7 bg-terracotta rounded-full" />
+                            <h2 className="text-xl font-playfair font-bold text-navy">Commission Payments</h2>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            {payments.length > 0 ? payments.map((payment) => (
+                                <div key={payment._id} className="border border-gray-100 rounded-2xl p-6 bg-white shadow-sm flex flex-col justify-between">
+                                    <div>
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
-                                                <h3 className="font-bold text-lg">Booking #{payment.bookingId?._id?.slice(-6)}</h3>
-                                                <p className="text-sm text-gray-600">Commission Amount: <span className="font-bold text-primary">Rs {payment.amount.toLocaleString()}</span></p>
-                                                <p className="text-xs text-gray-400">Due Date: {new Date(payment.dueDate).toLocaleDateString()}</p>
+                                                <h3 className="font-bold text-navy text-lg">Booking #{payment.bookingId?._id?.slice(-6)}</h3>
+                                                <p className="text-xs text-gray-400 mt-1">Due Date: {new Date(payment.dueDate).toLocaleDateString()}</p>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                {payment.status === 'pending' && <FaClock className="text-yellow-500" />}
-                                                {payment.status === 'verified' && <FaCheckCircle className="text-green-500" />}
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${payment.status === 'verified' ? 'bg-green-100 text-green-700' :
+                                            <div className="flex items-center gap-1.5">
+                                                {payment.status === 'pending' && <FaClock className="text-amber-500" />}
+                                                {payment.status === 'verified' && <FaCheckCircle className="text-emerald-500" />}
+                                                <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${
+                                                    payment.status === 'verified' ? 'bg-emerald-100 text-emerald-700' :
                                                     payment.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                                        'bg-yellow-100 text-yellow-700'
-                                                    }`}>
-                                                    {payment.status.toUpperCase()}
+                                                    'bg-amber-100 text-amber-700'
+                                                }`}>
+                                                    {payment.status}
                                                 </span>
                                             </div>
                                         </div>
+                                        <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-100">
+                                            <p className="text-sm text-gray-500 mb-1">Commission Amount</p>
+                                            <p className="text-2xl font-playfair font-bold text-terracotta">Rs {payment.amount.toLocaleString()}</p>
+                                        </div>
 
                                         {payment.status === 'pending' && (
-                                            <div className="mt-4 bg-orange-50 border border-orange-200 p-4 rounded-lg">
-                                                <h4 className="font-bold text-orange-800 mb-2">⚠️ Payment Required - Transfer Details</h4>
-                                                <div className="space-y-1 text-sm text-orange-900">
-                                                    <p><span className="font-semibold">Bank Name:</span> HBL Bank</p>
-                                                    <p><span className="font-semibold">Account Title:</span> Marriage Hall Admin</p>
-                                                    <p><span className="font-semibold">Account Number:</span> 1234-5678-9012-3456</p>
-                                                    <p><span className="font-semibold">Amount to Transfer:</span> Rs {payment.amount.toLocaleString()}</p>
+                                            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl mb-4">
+                                                <h4 className="font-bold text-amber-800 text-sm mb-2">⚠️ Transfer Details</h4>
+                                                <div className="space-y-1 text-xs text-amber-900 mb-3">
+                                                    <p><span className="font-semibold">Bank:</span> HBL Bank</p>
+                                                    <p><span className="font-semibold">Title:</span> Venuora Admin</p>
+                                                    <p><span className="font-semibold">Account:</span> 1234-5678-9012-3456</p>
                                                 </div>
-                                                <p className="text-xs text-red-600 font-bold mt-3">
-                                                    ⏰ Warning: If payment is not verified within 2 days, your hall and account will be automatically deleted!
+                                                <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">
+                                                    Note: Pay within 2 days to avoid account suspension.
                                                 </p>
                                             </div>
                                         )}
 
                                         {payment.status === 'pending' && !payment.paymentProof && (
-                                            <div className="mt-4">
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Upload Bank Transfer Proof</label>
+                                            <div>
+                                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Upload Transfer Proof</label>
                                                 <input
                                                     type="file"
                                                     accept="image/*"
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-200"
+                                                    className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-terracotta/10 file:text-terracotta hover:file:bg-terracotta/20 cursor-pointer"
                                                     onChange={(e) => {
-                                                        if (e.target.files[0]) {
-                                                            handleUploadProof(payment._id, e.target.files[0]);
-                                                        }
+                                                        if (e.target.files[0]) handleUploadProof(payment._id, e.target.files[0]);
                                                     }}
                                                 />
                                             </div>
                                         )}
 
                                         {payment.paymentProof && payment.status === 'pending' && (
-                                            <div className="mt-4 bg-blue-50 p-3 rounded">
-                                                <p className="text-sm text-blue-800">✓ Payment proof uploaded. Waiting for admin verification.</p>
+                                            <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 flex items-center gap-2">
+                                                <FaClock className="text-blue-500 text-sm" />
+                                                <p className="text-xs font-medium text-blue-800">Proof uploaded. Awaiting admin review.</p>
                                             </div>
                                         )}
-
                                         {payment.status === 'rejected' && payment.rejectionReason && (
-                                            <div className="mt-4 bg-red-50 p-3 rounded">
-                                                <p className="text-sm font-bold text-red-800">Rejection Reason:</p>
+                                            <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+                                                <p className="text-xs font-bold uppercase tracking-wider text-red-800 mb-1">Rejection Reason</p>
                                                 <p className="text-sm text-red-700">{payment.rejectionReason}</p>
                                             </div>
                                         )}
-
                                         {payment.status === 'verified' && (
-                                            <div className="mt-4 bg-green-50 p-3 rounded">
-                                                <p className="text-sm text-green-800">✓ Payment verified by admin</p>
+                                            <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 flex items-center gap-2">
+                                                <FaCheckCircle className="text-emerald-500 text-sm" />
+                                                <p className="text-xs font-medium text-emerald-800">Payment verified successfully.</p>
                                             </div>
                                         )}
                                     </div>
-                                ))
-                            ) : (
-                                <p className="text-gray-500 text-center py-8">No commission payments yet</p>
+                                </div>
+                            )) : (
+                                <div className="col-span-1 md:col-span-2 text-center py-16">
+                                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400 text-2xl"><FaMoneyBillWave /></div>
+                                    <p className="text-gray-500 font-medium">No commission payments yet</p>
+                                </div>
                             )}
                         </div>
                     </div>
                 )}
 
+                {/* PAYMENTS VERIFICATION */}
                 {activeTab === 'payments' && (
                     <div>
-                        <h2 className="text-xl font-bold text-text mb-6">Payment Verification</h2>
-                        <div className="space-y-4">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1 h-7 bg-terracotta rounded-full" />
+                            <h2 className="text-xl font-playfair font-bold text-navy">Customer Payment Verification</h2>
+                        </div>
+                        <div className="space-y-5">
                             {bookings.filter(b => b.status === 'payment_submitted').length > 0 ? (
                                 bookings.filter(b => b.status === 'payment_submitted').map((booking) => (
-                                    <div key={booking._id} className="border border-gray-200 rounded-lg p-6 bg-white">
+                                    <div key={booking._id} className="border border-gray-100 rounded-2xl p-6 bg-white shadow-sm">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div>
-                                                <h3 className="font-bold text-lg mb-4">Booking Details</h3>
-                                                <div className="space-y-2 text-sm">
-                                                    <p><span className="font-semibold">Booking ID:</span> #{booking._id.slice(-6)}</p>
-                                                    <p><span className="font-semibold">Customer:</span> {booking.customerId?.name || 'N/A'}</p>
-                                                    <p><span className="font-semibold">Email:</span> {booking.customerId?.email || 'N/A'}</p>
-                                                    <p><span className="font-semibold">Hall:</span> {booking.hallId?.name || 'N/A'}</p>
-                                                    <p><span className="font-semibold">Event Date:</span> {new Date(booking.eventDate).toLocaleDateString()}</p>
-                                                    <p><span className="font-semibold">Total Amount:</span> <span className="text-green-600 font-bold">Rs {(booking.totalAmount || 0).toLocaleString()}</span></p>
-                                                    <p><span className="font-semibold">Prebooking Amount (10%):</span> <span className="text-primary font-bold">Rs {(booking.prebookingAmount || 0).toLocaleString()}</span></p>
+                                                <h3 className="font-bold text-navy text-lg mb-4">Booking Details</h3>
+                                                <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm border border-gray-100">
+                                                    <div className="flex justify-between"><span className="text-gray-500">ID</span><span className="font-medium text-navy">#{booking._id.slice(-6)}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-500">Customer</span><span className="font-medium text-navy">{booking.customerId?.name || 'N/A'}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-500">Event Date</span><span className="font-medium text-navy">{new Date(booking.eventDate).toLocaleDateString()}</span></div>
+                                                    <div className="border-t border-gray-200 my-2 pt-2 flex justify-between"><span className="text-gray-500 font-bold">Total Amount</span><span className="font-bold text-emerald-600">Rs {(booking.totalAmount || 0).toLocaleString()}</span></div>
+                                                    <div className="flex justify-between"><span className="text-gray-500 font-bold">Prebooking (10%)</span><span className="font-bold text-terracotta">Rs {(booking.prebookingAmount || 0).toLocaleString()}</span></div>
                                                 </div>
                                             </div>
-
                                             <div>
-                                                <h3 className="font-bold text-lg mb-4">Payment Information</h3>
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <p className="text-sm font-semibold text-gray-700 mb-1">Transaction ID:</p>
-                                                        <p className="text-sm bg-gray-50 p-2 rounded border border-gray-200 font-mono">{booking.transactionId || 'N/A'}</p>
-                                                    </div>
+                                                <h3 className="font-bold text-navy text-lg mb-4">Payment Proof</h3>
+                                                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-sm">
+                                                    <p className="mb-2"><span className="text-gray-500">Transaction ID:</span> <span className="font-mono font-medium text-navy bg-white px-2 py-0.5 rounded border border-gray-200">{booking.transactionId}</span></p>
+                                                    <img src={`https://mariage-hall-booking-system.vercel.app/${booking.paymentProof}`} alt="Proof" className="w-full max-w-sm rounded-lg border border-gray-200 mt-3" />
                                                 </div>
                                             </div>
                                         </div>
-
-                                        <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200">
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedBooking(booking);
-                                                    setShowRejectModal(true);
-                                                }}
-                                                className="px-6 py-2 bg-red-500 text-white rounded-lg font-bold hover:bg-red-600 transition-colors"
-                                            >
-                                                Reject Payment
-                                            </button>
-                                            <button
-                                                onClick={() => handleVerifyPayment(booking._id)}
-                                                className="px-6 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors"
-                                            >
-                                                Verify Payment
-                                            </button>
+                                        <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-gray-100">
+                                            <button onClick={() => { setSelectedBooking(booking); setShowRejectModal(true); }} className="px-6 py-2.5 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors">Reject Payment</button>
+                                            <button onClick={() => handleVerifyPayment(booking._id)} className="px-6 py-2.5 bg-emerald-500 text-white rounded-xl font-bold text-sm hover:bg-emerald-600 transition-colors">Verify Payment</button>
                                         </div>
                                     </div>
                                 ))
                             ) : (
-                                <p className="text-gray-500 text-center py-8">No payments awaiting verification</p>
+                                <div className="text-center py-16">
+                                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400 text-2xl"><FaCheckCircle /></div>
+                                    <p className="text-gray-500 font-medium">No payments awaiting verification</p>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -758,36 +645,20 @@ const ManagerDashboard = () => {
 
             {/* Rejection Modal */}
             {showRejectModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-                        <h3 className="text-xl font-bold text-text mb-4">Reject Payment</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                            Please provide a reason for rejecting this payment. The customer will see this message.
-                        </p>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+                        <h3 className="text-xl font-playfair font-bold text-navy mb-3">Reject Payment</h3>
+                        <p className="text-sm text-gray-600 mb-5">Please provide a reason for rejecting this payment. The customer will see this message.</p>
                         <textarea
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
-                            className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:border-primary mb-4"
+                            className={`${inputCls} py-3 h-auto resize-none mb-5`}
                             rows="4"
-                            placeholder="e.g., Transaction ID does not match, Payment amount is incorrect, etc."
+                            placeholder="e.g., Transaction ID does not match, amount incorrect..."
                         />
-                        <div className="flex justify-end space-x-3">
-                            <button
-                                onClick={() => {
-                                    setShowRejectModal(false);
-                                    setRejectionReason('');
-                                    setSelectedBooking(null);
-                                }}
-                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleRejectPayment}
-                                className="px-4 py-2 bg-red-500 text-white rounded-lg font-bold hover:bg-red-600"
-                            >
-                                Confirm Rejection
-                            </button>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => { setShowRejectModal(false); setRejectionReason(''); setSelectedBooking(null); }} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-bold text-sm">Cancel</button>
+                            <button onClick={handleRejectPayment} className="px-5 py-2.5 bg-red-500 text-white rounded-xl font-bold text-sm hover:bg-red-600">Confirm Rejection</button>
                         </div>
                     </div>
                 </div>
@@ -795,70 +666,45 @@ const ManagerDashboard = () => {
 
             {/* Availability Modal */}
             {showAvailabilityModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-                        <h3 className="text-xl font-bold text-text mb-4">Manage Availability</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                            Select dates to mark as booked (Red). Unselected dates are available (Green).
-                        </p>
-                        <div className="flex justify-center mb-4">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+                        <h3 className="text-xl font-playfair font-bold text-navy mb-3">Manage Availability</h3>
+                        <p className="text-sm text-gray-600 mb-5">Select dates to mark as booked (Red). Unselected dates are available.</p>
+                        <div className="flex justify-center mb-6 overflow-hidden rounded-2xl border border-gray-200">
                             <Calendar
                                 onClickDay={handleDateChange}
+                                className="border-none w-full !font-body"
                                 tileClassName={({ date, view }) => {
                                     if (view === 'month') {
                                         const dateString = date.toISOString().split('T')[0];
-                                        return availabilityDates.includes(dateString) ? 'bg-red-100 text-red-600 rounded-full font-bold' : 'text-green-600 font-bold';
+                                        return availabilityDates.includes(dateString) 
+                                            ? 'bg-red-100 !text-red-600 rounded-full font-bold' 
+                                            : '!text-emerald-600 font-bold';
                                     }
                                 }}
                             />
                         </div>
-                        <div className="flex justify-end space-x-3">
-                            <button
-                                onClick={() => setShowAvailabilityModal(false)}
-                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSaveAvailability}
-                                className="px-4 py-2 bg-primary text-white rounded-lg font-bold hover:bg-primary-dark"
-                            >
-                                Save Changes
-                            </button>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => setShowAvailabilityModal(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-bold text-sm">Cancel</button>
+                            <button onClick={handleSaveAvailability} className="btn-cta px-5 py-2.5 rounded-xl font-bold text-sm">Save Changes</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Menu Management Modal */}
             {showMenuModal && selectedHallForMenu && (
                 <MenuManagementModal
                     hall={selectedHallForMenu}
-                    onClose={() => {
-                        setShowMenuModal(false);
-                        setSelectedHallForMenu(null);
-                    }}
-                    onSuccess={() => {
-                        setShowMenuModal(false);
-                        setSelectedHallForMenu(null);
-                        fetchHalls();
-                    }}
+                    onClose={() => { setShowMenuModal(false); setSelectedHallForMenu(null); }}
+                    onSuccess={() => { setShowMenuModal(false); setSelectedHallForMenu(null); fetchHalls(); }}
                 />
             )}
 
-            {/* Custom Food Review Modal */}
             {showFoodReviewModal && selectedBookingForFood && (
                 <CustomFoodReviewModal
                     booking={selectedBookingForFood}
-                    onClose={() => {
-                        setShowFoodReviewModal(false);
-                        setSelectedBookingForFood(null);
-                    }}
-                    onSuccess={() => {
-                        setShowFoodReviewModal(false);
-                        setSelectedBookingForFood(null);
-                        fetchBookings();
-                    }}
+                    onClose={() => { setShowFoodReviewModal(false); setSelectedBookingForFood(null); }}
+                    onSuccess={() => { setShowFoodReviewModal(false); setSelectedBookingForFood(null); fetchBookings(); }}
                 />
             )}
         </div>

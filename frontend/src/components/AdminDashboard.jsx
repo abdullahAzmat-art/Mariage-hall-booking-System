@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FaUsers, FaMoneyBillWave, FaUserTie, FaTrash, FaBuilding, FaEnvelope, FaReply } from 'react-icons/fa';
+import { 
+    FaUsers, FaMoneyBillWave, FaUserTie, FaTrash, FaBuilding, 
+    FaEnvelope, FaReply, FaMapMarkerAlt, FaCheckCircle, FaTimesCircle,
+    FaClock, FaShieldAlt, FaStore
+} from 'react-icons/fa';
 import userService from '../services/userService';
 import hallService from '../services/hallService';
 import commissionService from '../services/commissionService';
@@ -10,281 +14,258 @@ const AdminDashboard = () => {
     const [users, setUsers] = useState([]);
     const [halls, setHalls] = useState([]);
     const [complaints, setComplaints] = useState([]);
-    const [replyText, setReplyText] = useState({}); // Map of complaint ID to reply text
+    const [replyText, setReplyText] = useState({});
     const [payments, setPayments] = useState([]);
-    const [rejectionReasons, setRejectionReasons] = useState({}); // Map of payment ID to rejection reason
+    const [rejectionReasons, setRejectionReasons] = useState({});
 
     useEffect(() => {
-        if (activeTab === 'applications') {
-            fetchApplications();
-        } else if (activeTab === 'users') {
-            fetchUsers();
-        } else if (activeTab === 'halls') {
-            fetchHalls();
-        } else if (activeTab === 'complaints') {
-            fetchComplaints();
-        } else if (activeTab === 'commissions') {
-            fetchPayments();
-        }
+        if (activeTab === 'applications') fetchApplications();
+        else if (activeTab === 'users') fetchUsers();
+        else if (activeTab === 'halls') fetchHalls();
+        else if (activeTab === 'complaints') fetchComplaints();
+        else if (activeTab === 'commissions') fetchPayments();
     }, [activeTab]);
 
     const fetchApplications = async () => {
-        try {
-            const data = await userService.getManagerApplications();
-            setApplications(data);
-        } catch (error) {
-            console.error('Failed to fetch applications', error);
-        }
+        try { const data = await userService.getManagerApplications(); setApplications(data); }
+        catch (error) { console.error('Failed to fetch applications', error); }
     };
-
     const fetchUsers = async () => {
-        try {
-            const data = await userService.getUsers();
-            setUsers(data);
-        } catch (error) {
-            console.error('Failed to fetch users', error);
-        }
+        try { const data = await userService.getUsers(); setUsers(data); }
+        catch (error) { console.error('Failed to fetch users', error); }
     };
-
     const fetchHalls = async () => {
-        try {
-            const data = await hallService.getAllHalls();
-            setHalls(data);
-        } catch (error) {
-            console.error('Failed to fetch halls', error);
-        }
+        try { const data = await hallService.getAllHalls(); setHalls(data); }
+        catch (error) { console.error('Failed to fetch halls', error); }
     };
-
     const fetchPayments = async () => {
-        try {
-            const data = await commissionService.getPendingPayments();
-            setPayments(data);
-        } catch (error) {
-            console.error('Failed to fetch payments', error);
-        }
+        try { const data = await commissionService.getPendingPayments(); setPayments(data); }
+        catch (error) { console.error('Failed to fetch payments', error); }
     };
-
     const handleVerifyPayment = async (paymentId) => {
         if (window.confirm('Verify this payment?')) {
-            try {
-                await commissionService.verifyPayment(paymentId);
-                alert('Payment verified successfully');
-                fetchPayments();
-            } catch (error) {
-                alert('Failed to verify payment');
-            }
+            try { await commissionService.verifyPayment(paymentId); alert('Payment verified'); fetchPayments(); }
+            catch { alert('Failed to verify payment'); }
         }
     };
-
     const handleRejectPayment = async (paymentId) => {
         const reason = rejectionReasons[paymentId];
-        if (!reason) {
-            alert('Please provide a rejection reason');
-            return;
-        }
+        if (!reason) { alert('Please provide a rejection reason'); return; }
         if (window.confirm('Reject this payment?')) {
-            try {
-                await commissionService.rejectPayment(paymentId, reason);
-                alert('Payment rejected');
-                fetchPayments();
-                setRejectionReasons({ ...rejectionReasons, [paymentId]: '' });
-            } catch (error) {
-                alert('Failed to reject payment');
-            }
+            try { await commissionService.rejectPayment(paymentId, reason); alert('Payment rejected'); fetchPayments(); setRejectionReasons({ ...rejectionReasons, [paymentId]: '' }); }
+            catch { alert('Failed to reject payment'); }
         }
     };
-
     const fetchComplaints = async () => {
-        try {
-            const complaintService = (await import('../services/complaintService')).default;
-            const data = await complaintService.getAllComplaints();
-            setComplaints(data);
-        } catch (error) {
-            console.error('Failed to fetch complaints', error);
-        }
+        try { const complaintService = (await import('../services/complaintService')).default; const data = await complaintService.getAllComplaints(); setComplaints(data); }
+        catch (error) { console.error('Failed to fetch complaints', error); }
     };
-
     const handleReply = async (complaintId) => {
-        try {
-            const complaintService = (await import('../services/complaintService')).default;
-            await complaintService.replyToComplaint(complaintId, replyText[complaintId]);
-            alert('Reply sent successfully');
-            fetchComplaints();
-            setReplyText({ ...replyText, [complaintId]: '' });
-        } catch (error) {
-            alert('Failed to send reply');
-        }
+        try { const complaintService = (await import('../services/complaintService')).default; await complaintService.replyToComplaint(complaintId, replyText[complaintId]); alert('Reply sent'); fetchComplaints(); setReplyText({ ...replyText, [complaintId]: '' }); }
+        catch { alert('Failed to send reply'); }
     };
-
     const handleStatusUpdate = async (userId, status) => {
-        try {
-            await userService.updateManagerApplicationStatus(userId, status);
-            fetchApplications();
-            alert(`Application ${status}`);
-        } catch (error) {
-            alert('Failed to update status');
-        }
+        try { await userService.updateManagerApplicationStatus(userId, status); fetchApplications(); alert(`Application ${status}`); }
+        catch { alert('Failed to update status'); }
     };
-
     const handleDeleteUser = async (userId) => {
         if (window.confirm('Are you sure you want to delete this user?')) {
-            try {
-                await userService.deleteUser(userId);
-                setUsers(users.filter(user => user._id !== userId));
-                alert('User deleted successfully');
-            } catch (error) {
-                alert('Failed to delete user');
-            }
+            try { await userService.deleteUser(userId); setUsers(users.filter(u => u._id !== userId)); alert('User deleted'); }
+            catch { alert('Failed to delete user'); }
+        }
+    };
+    const handleDeleteHall = async (hallId) => {
+        if (window.confirm('Are you sure you want to delete this hall? This action cannot be undone.')) {
+            try { await hallService.deleteHall(hallId); setHalls(halls.filter(h => h._id !== hallId)); alert('Hall deleted'); }
+            catch { alert('Failed to delete hall'); }
         }
     };
 
-    const handleDeleteHall = async (hallId) => {
-        if (window.confirm('Are you sure you want to delete this hall? This action cannot be undone.')) {
-            try {
-                await hallService.deleteHall(hallId);
-                setHalls(halls.filter(hall => hall._id !== hallId));
-                alert('Hall deleted successfully');
-            } catch (error) {
-                alert('Failed to delete hall');
-            }
-        }
+    const getInitials = (name) => (name || 'U')[0].toUpperCase();
+    const roleBadge = (role) => {
+        if (role === 'admin') return 'bg-navy text-white';
+        if (role === 'manager') return 'bg-terracotta text-white';
+        return 'bg-gray-100 text-gray-600';
     };
+
+    const tabs = [
+        { id: 'users', label: 'Users', icon: FaUsers },
+        { id: 'applications', label: 'Applications', icon: FaUserTie, badge: applications.length },
+        { id: 'halls', label: 'Venue Supervision', icon: FaBuilding },
+        { id: 'complaints', label: 'Complaints', icon: FaEnvelope },
+        { id: 'commissions', label: 'Commissions', icon: FaMoneyBillWave },
+    ];
+
+    const thCls = "px-4 py-3 text-xs font-bold uppercase tracking-wider text-left";
+    const tdCls = "px-4 py-4 text-sm";
+    const inputCls = "w-full h-12 px-4 rounded-xl border border-gray-200 bg-gray-50/50 text-navy text-sm font-medium focus:bg-white focus:outline-none focus:border-terracotta focus:ring-2 focus:ring-terracotta/20 transition-all placeholder-gray-400";
 
     return (
         <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-500">Total Revenue</h3>
-                        <FaMoneyBillWave className="text-green-500 text-xl" />
+            {/* ── Stats Row ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 border-t-4 border-t-emerald-500">
+                    <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Total Revenue</p>
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                            <FaMoneyBillWave />
+                        </div>
                     </div>
-                    <p className="text-3xl font-bold text-text">Rs 45,200</p>
+                    <p className="text-2xl font-playfair font-bold text-navy">Rs 45,200</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-500">Total Bookings</h3>
-                        <FaBuilding className="text-primary text-xl" />
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 border-t-4 border-t-navy">
+                    <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Total Bookings</p>
+                        <div className="w-10 h-10 rounded-xl bg-navy/10 text-navy flex items-center justify-center">
+                            <FaBuilding />
+                        </div>
                     </div>
-                    <p className="text-3xl font-bold text-text">128</p>
+                    <p className="text-2xl font-playfair font-bold text-navy">128</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-500">Active Halls</h3>
-                        <FaBuilding className="text-blue-500 text-xl" />
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 border-t-4 border-t-terracotta">
+                    <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Active Venues</p>
+                        <div className="w-10 h-10 rounded-xl bg-terracotta/10 text-terracotta flex items-center justify-center">
+                            <FaStore />
+                        </div>
                     </div>
-                    <p className="text-3xl font-bold text-text">{halls.length || 12}</p>
+                    <p className="text-2xl font-playfair font-bold text-navy">{halls.length || 12}</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-gray-500">Total Users</h3>
-                        <FaUsers className="text-gold text-xl" />
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 border-t-4 border-t-amber-400">
+                    <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Total Users</p>
+                        <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                            <FaUsers />
+                        </div>
                     </div>
-                    <p className="text-3xl font-bold text-text">{users.length || 850}</p>
+                    <p className="text-2xl font-playfair font-bold text-navy">{users.length || 850}</p>
                 </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex space-x-4 overflow-x-auto pb-2">
-                <button
-                    onClick={() => setActiveTab('users')}
-                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'users' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Manage Users
-                </button>
-                <button
-                    onClick={() => setActiveTab('applications')}
-                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'applications' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Manager Applications
-                </button>
-                <button
-                    onClick={() => setActiveTab('halls')}
-                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'halls' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                >
-                    View Halls (Supervision)
-                </button>
-                <button
-                    onClick={() => setActiveTab('complaints')}
-                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'complaints' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Manage Complaints
-                </button>
-                <button
-                    onClick={() => setActiveTab('commissions')}
-                    className={`px-6 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${activeTab === 'commissions' ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Verify Commissions
-                </button>
+            {/* ── Tab Navigation ── */}
+            <div className="bg-white rounded-2xl p-2 shadow-sm border border-gray-100 flex gap-1 overflow-x-auto scrollbar-none">
+                {tabs.map(({ id, label, icon: Icon, badge }) => (
+                    <button
+                        key={id}
+                        onClick={() => setActiveTab(id)}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 relative ${
+                            activeTab === id
+                                ? 'bg-navy text-white shadow-sm'
+                                : 'text-gray-500 hover:bg-gray-50 hover:text-navy'
+                        }`}
+                    >
+                        <Icon className="text-xs" />
+                        {label}
+                        {badge > 0 && (
+                            <span className="w-4 h-4 rounded-full bg-terracotta text-white text-[10px] font-bold flex items-center justify-center">
+                                {badge}
+                            </span>
+                        )}
+                    </button>
+                ))}
             </div>
 
-            {/* Content Area */}
-            <div className="bg-white rounded-xl shadow-soft border border-gray-100 p-6 min-h-[400px]">
+            {/* ── Content Panel ── */}
+            <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-6 sm:p-8 min-h-[500px]">
+
+                {/* USERS */}
                 {activeTab === 'users' && (
                     <div>
-                        <h2 className="text-xl font-bold text-text mb-6">User Management</h2>
-                        <div className="overflow-x-auto">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1 h-7 bg-terracotta rounded-full" />
+                            <h2 className="text-xl font-playfair font-bold text-navy">User Management</h2>
+                            <span className="ml-auto text-xs font-bold bg-navy/10 text-navy px-3 py-1 rounded-full">{users.length} users</span>
+                        </div>
+                        <div className="overflow-x-auto rounded-2xl border border-gray-100">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-gray-600 font-medium">
-                                    <tr>
-                                        <th className="p-4">Name</th>
-                                        <th className="p-4">Email</th>
-                                        <th className="p-4">Role</th>
-                                        <th className="p-4">Actions</th>
+                                <thead>
+                                    <tr className="bg-gray-50 border-b border-gray-100">
+                                        <th className={thCls + " text-gray-500"}>User</th>
+                                        <th className={thCls + " text-gray-500"}>Email</th>
+                                        <th className={thCls + " text-gray-500"}>Role</th>
+                                        <th className={thCls + " text-gray-500"}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {users.map(user => (
-                                        <tr key={user._id} className="hover:bg-gray-50">
-                                            <td className="p-4 font-medium">{user.name}</td>
-                                            <td className="p-4 text-gray-600">{user.email}</td>
-                                            <td className="p-4 capitalize">{user.role}</td>
-                                            <td className="p-4">
+                                        <tr key={user._id} className="hover:bg-ivory-warm transition-colors">
+                                            <td className={tdCls}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-9 h-9 rounded-full bg-navy/10 text-navy font-bold flex items-center justify-center text-sm shrink-0">
+                                                        {getInitials(user.name)}
+                                                    </div>
+                                                    <span className="font-semibold text-navy">{user.name}</span>
+                                                </div>
+                                            </td>
+                                            <td className={tdCls + " text-gray-500"}>{user.email}</td>
+                                            <td className={tdCls}>
+                                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold capitalize ${roleBadge(user.role)}`}>
+                                                    {user.role}
+                                                </span>
+                                            </td>
+                                            <td className={tdCls}>
                                                 <button
                                                     onClick={() => handleDeleteUser(user._id)}
-                                                    className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors"
+                                                    className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
                                                     title="Delete User"
                                                 >
-                                                    <FaTrash />
+                                                    <FaTrash className="text-xs" />
                                                 </button>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
+                            {users.length === 0 && (
+                                <p className="text-center text-gray-400 py-8 text-sm">No users found.</p>
+                            )}
                         </div>
                     </div>
-
                 )}
 
+                {/* APPLICATIONS */}
                 {activeTab === 'applications' && (
                     <div>
-                        <h2 className="text-xl font-bold text-text mb-6">Manager Applications</h2>
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1 h-7 bg-terracotta rounded-full" />
+                            <h2 className="text-xl font-playfair font-bold text-navy">Manager Applications</h2>
+                        </div>
                         {applications.length === 0 ? (
-                            <p className="text-gray-500">No pending applications.</p>
+                            <div className="text-center py-16">
+                                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400 text-2xl"><FaUserTie /></div>
+                                <p className="text-gray-500 font-medium">No pending applications</p>
+                            </div>
                         ) : (
                             <div className="grid grid-cols-1 gap-4">
                                 {applications.map(app => (
-                                    <div key={app._id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h3 className="font-bold text-lg">{app.managerApplication.businessName}</h3>
-                                                <p className="text-sm text-gray-600 mb-2">{app.managerApplication.businessAddress}</p>
-                                                <p className="text-gray-700 mb-3">{app.managerApplication.description}</p>
-                                                <div className="flex items-center text-sm text-gray-500">
-                                                    <FaUserTie className="mr-2" /> {app.name} ({app.email})
+                                    <div key={app._id} className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-md transition-all">
+                                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+                                            <div className="flex-1">
+                                                <h3 className="font-playfair text-xl font-bold text-navy mb-1">
+                                                    {app.managerApplication?.businessName}
+                                                </h3>
+                                                <div className="flex items-center gap-1.5 text-terracotta text-sm mb-2">
+                                                    <FaMapMarkerAlt className="text-xs" />
+                                                    <span>{app.managerApplication?.businessAddress}</span>
+                                                </div>
+                                                <p className="text-gray-600 text-sm leading-relaxed mb-3">
+                                                    {app.managerApplication?.description}
+                                                </p>
+                                                <div className="flex items-center gap-2 text-sm text-gray-400">
+                                                    <FaUserTie className="text-xs" />
+                                                    <span>{app.name} · {app.email}</span>
                                                 </div>
                                             </div>
-                                            <div className="flex space-x-2">
+                                            <div className="flex gap-2 shrink-0">
                                                 <button
                                                     onClick={() => handleStatusUpdate(app._id, 'approved')}
-                                                    className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
+                                                    className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors"
                                                 >
                                                     Approve
                                                 </button>
                                                 <button
                                                     onClick={() => handleStatusUpdate(app._id, 'rejected')}
-                                                    className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+                                                    className="px-5 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-colors"
                                                 >
                                                     Reject
                                                 </button>
@@ -297,36 +278,58 @@ const AdminDashboard = () => {
                     </div>
                 )}
 
+                {/* HALLS */}
                 {activeTab === 'halls' && (
                     <div>
-                        <h2 className="text-xl font-bold text-text mb-6">All Halls (Supervision View)</h2>
-                        <div className="overflow-x-auto">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1 h-7 bg-terracotta rounded-full" />
+                            <h2 className="text-xl font-playfair font-bold text-navy">Venue Supervision</h2>
+                            <span className="ml-auto text-xs font-bold bg-terracotta/10 text-terracotta px-3 py-1 rounded-full">{halls.length} venues</span>
+                        </div>
+                        <div className="overflow-x-auto rounded-2xl border border-gray-100">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-gray-600 font-medium">
-                                    <tr>
-                                        <th className="p-4">Name</th>
-                                        <th className="p-4">Location</th>
-                                        <th className="p-4">Capacity</th>
-                                        <th className="p-4">Price</th>
-                                        <th className="p-4">Manager</th>
-                                        <th className="p-4">Actions</th>
+                                <thead>
+                                    <tr className="bg-gray-50 border-b border-gray-100">
+                                        <th className={thCls + " text-gray-500"}>Hall Name</th>
+                                        <th className={thCls + " text-gray-500"}>Location</th>
+                                        <th className={thCls + " text-gray-500"}>Capacity</th>
+                                        <th className={thCls + " text-gray-500"}>Price</th>
+                                        <th className={thCls + " text-gray-500"}>Manager</th>
+                                        <th className={thCls + " text-gray-500"}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {halls.map(hall => (
-                                        <tr key={hall._id} className="hover:bg-gray-50">
-                                            <td className="p-4 font-medium">{hall.name}</td>
-                                            <td className="p-4 text-gray-600">{hall.location}</td>
-                                            <td className="p-4">{hall.capacity}</td>
-                                            <td className="p-4">Rs {hall.price}</td>
-                                            <td className="p-4 text-gray-600">{hall.manager?.name || 'N/A'}</td>
-                                            <td className="p-4">
+                                        <tr key={hall._id} className="hover:bg-ivory-warm transition-colors">
+                                            <td className={tdCls + " font-semibold text-navy"}>{hall.name}</td>
+                                            <td className={tdCls}>
+                                                <div className="flex items-center gap-1.5 text-gray-500 text-xs">
+                                                    <FaMapMarkerAlt className="text-terracotta text-[10px]" />
+                                                    {hall.location}
+                                                </div>
+                                            </td>
+                                            <td className={tdCls}>
+                                                <span className="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded-full">
+                                                    {hall.capacity} guests
+                                                </span>
+                                            </td>
+                                            <td className={tdCls + " font-bold text-terracotta"}>Rs {hall.price?.toLocaleString?.() || hall.price}</td>
+                                            <td className={tdCls}>
+                                                {hall.manager ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-7 h-7 rounded-full bg-navy/10 text-navy font-bold flex items-center justify-center text-xs shrink-0">
+                                                            {getInitials(hall.manager?.name)}
+                                                        </div>
+                                                        <span className="text-gray-600 text-xs">{hall.manager?.name}</span>
+                                                    </div>
+                                                ) : <span className="text-gray-400 text-xs">N/A</span>}
+                                            </td>
+                                            <td className={tdCls}>
                                                 <button
                                                     onClick={() => handleDeleteHall(hall._id)}
-                                                    className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors"
-                                                    title="Delete Hall"
+                                                    className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
                                                 >
-                                                    <FaTrash />
+                                                    <FaTrash className="text-xs" />
                                                 </button>
                                             </td>
                                         </tr>
@@ -334,56 +337,64 @@ const AdminDashboard = () => {
                                 </tbody>
                             </table>
                             {halls.length === 0 && (
-                                <p className="text-center text-gray-500 py-4">No halls found.</p>
+                                <p className="text-center text-gray-400 py-8 text-sm">No halls found.</p>
                             )}
                         </div>
                     </div>
                 )}
 
+                {/* COMPLAINTS */}
                 {activeTab === 'complaints' && (
                     <div>
-                        <h2 className="text-xl font-bold text-text mb-6">User Complaints</h2>
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1 h-7 bg-terracotta rounded-full" />
+                            <h2 className="text-xl font-playfair font-bold text-navy">User Complaints</h2>
+                        </div>
                         {complaints.length === 0 ? (
-                            <p className="text-gray-500">No complaints found.</p>
+                            <div className="text-center py-16">
+                                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400 text-2xl"><FaEnvelope /></div>
+                                <p className="text-gray-500 font-medium">No complaints found</p>
+                            </div>
                         ) : (
                             <div className="space-y-4">
                                 {complaints.map(complaint => (
-                                    <div key={complaint._id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow bg-white">
-                                        <div className="flex justify-between items-start mb-4">
+                                    <div key={complaint._id} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+                                        <div className="flex items-start justify-between mb-3">
                                             <div>
-                                                <h3 className="font-bold text-lg text-gray-800">{complaint.subject}</h3>
-                                                <p className="text-sm text-gray-500">From: {complaint.name} ({complaint.email})</p>
-                                                <p className="text-xs text-gray-400">{new Date(complaint.createdAt).toLocaleString()}</p>
+                                                <h3 className="font-bold text-navy">{complaint.subject}</h3>
+                                                <p className="text-xs text-gray-400 mt-0.5">
+                                                    From: {complaint.name} · {complaint.email} · {new Date(complaint.createdAt).toLocaleDateString()}
+                                                </p>
                                             </div>
-                                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${complaint.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ml-4 ${complaint.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                                 {complaint.status.toUpperCase()}
                                             </span>
                                         </div>
-
-                                        <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                                            <p className="text-gray-700">{complaint.message}</p>
+                                        <div className="bg-gray-50 rounded-xl p-4 text-gray-700 text-sm mb-4">
+                                            {complaint.message}
                                         </div>
-
                                         {complaint.adminReply ? (
-                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                                <p className="text-sm font-bold text-blue-800 mb-1">Your Reply:</p>
-                                                <p className="text-blue-900">{complaint.adminReply}</p>
+                                            <div className="bg-terracotta/5 rounded-xl p-4 border-l-2 border-terracotta">
+                                                <p className="text-xs font-bold uppercase tracking-wider text-terracotta mb-1.5 flex items-center gap-1.5">
+                                                    <FaReply className="text-[10px]" /> Your Reply
+                                                </p>
+                                                <p className="text-gray-700 text-sm">{complaint.adminReply}</p>
                                             </div>
                                         ) : (
-                                            <div className="mt-4">
+                                            <div>
                                                 <textarea
-                                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none mb-2"
-                                                    placeholder="Write your reply here..."
+                                                    className="w-full p-4 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-terracotta focus:ring-2 focus:ring-terracotta/20 resize-none mb-3"
+                                                    placeholder="Write your reply..."
                                                     rows="3"
                                                     value={replyText[complaint._id] || ''}
                                                     onChange={(e) => setReplyText({ ...replyText, [complaint._id]: e.target.value })}
-                                                ></textarea>
+                                                />
                                                 <button
                                                     onClick={() => handleReply(complaint._id)}
-                                                    className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors flex items-center gap-2"
                                                     disabled={!replyText[complaint._id]}
+                                                    className="flex items-center gap-2 px-5 py-2.5 bg-terracotta text-white text-xs font-bold rounded-xl hover:bg-terracotta/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
-                                                    <FaReply /> Send Reply
+                                                    <FaReply className="text-[10px]" /> Send Reply
                                                 </button>
                                             </div>
                                         )}
@@ -394,59 +405,80 @@ const AdminDashboard = () => {
                     </div>
                 )}
 
+                {/* COMMISSIONS */}
                 {activeTab === 'commissions' && (
                     <div>
-                        <h2 className="text-xl font-bold text-text mb-6">Commission Payment Verification</h2>
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1 h-7 bg-terracotta rounded-full" />
+                            <h2 className="text-xl font-playfair font-bold text-navy">Commission Payments</h2>
+                        </div>
                         {payments.length === 0 ? (
-                            <p className="text-gray-500">No pending commission payments to verify.</p>
+                            <div className="text-center py-16">
+                                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400 text-2xl"><FaMoneyBillWave /></div>
+                                <p className="text-gray-500 font-medium">No pending commission payments</p>
+                            </div>
                         ) : (
                             <div className="space-y-4">
                                 {payments.map(payment => (
-                                    <div key={payment._id} className="border border-gray-200 rounded-lg p-6 bg-white">
-                                        <div className="flex justify-between items-start mb-4">
+                                    <div key={payment._id} className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
                                             <div>
-                                                <h3 className="font-bold text-lg">Manager: {payment.managerId?.name}</h3>
-                                                <p className="text-sm text-gray-600">Email: {payment.managerId?.email}</p>
-                                                <p className="text-sm text-gray-600">Booking ID: #{payment.bookingId?._id?.slice(-6)}</p>
-                                                <p className="text-sm font-bold text-primary mt-2">Commission Amount: Rs {payment.amount.toLocaleString()}</p>
-                                                <p className="text-xs text-gray-400">Due Date: {new Date(payment.dueDate).toLocaleDateString()}</p>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <div className="w-10 h-10 rounded-xl bg-navy/10 text-navy font-bold flex items-center justify-center">
+                                                        {getInitials(payment.managerId?.name)}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-bold text-navy">{payment.managerId?.name}</h3>
+                                                        <p className="text-xs text-gray-400">{payment.managerId?.email}</p>
+                                                    </div>
+                                                </div>
+                                                <p className="text-xs text-gray-500">Booking Ref: #{payment.bookingId?._id?.slice(-6)}</p>
+                                                <p className="text-xs text-gray-400">Due: {new Date(payment.dueDate).toLocaleDateString()}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Commission</p>
+                                                <p className="text-2xl font-playfair font-bold text-terracotta">
+                                                    Rs {payment.amount?.toLocaleString()}
+                                                </p>
                                             </div>
                                         </div>
 
                                         {payment.paymentProof && (
-                                            <div className="mb-4">
-                                                <p className="text-sm font-medium text-gray-700 mb-2">Payment Proof:</p>
+                                            <div className="mb-5">
+                                                <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Payment Proof</p>
                                                 <img
                                                     src={`https://mariage-hall-booking-system.vercel.app/${payment.paymentProof}`}
                                                     alt="Payment Proof"
-                                                    className="max-w-md rounded-lg border border-gray-300"
+                                                    className="max-w-sm rounded-2xl border border-gray-200 shadow-sm"
                                                 />
                                             </div>
                                         )}
 
-                                        <div className="flex gap-4 items-end">
+                                        <div className="flex flex-col sm:flex-row items-end gap-3">
                                             <div className="flex-1">
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Rejection Reason (if rejecting)</label>
+                                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+                                                    Rejection Reason (if rejecting)
+                                                </label>
                                                 <input
                                                     type="text"
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
+                                                    className={inputCls}
                                                     placeholder="Enter reason for rejection"
                                                     value={rejectionReasons[payment._id] || ''}
                                                     onChange={(e) => setRejectionReasons({ ...rejectionReasons, [payment._id]: e.target.value })}
                                                 />
                                             </div>
-                                            <div className="flex gap-2">
+                                            <div className="flex gap-2 shrink-0">
                                                 <button
                                                     onClick={() => handleVerifyPayment(payment._id)}
-                                                    className="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors"
+                                                    className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5"
                                                 >
-                                                    Verify
+                                                    <FaCheckCircle className="text-[11px]" /> Verify
                                                 </button>
                                                 <button
                                                     onClick={() => handleRejectPayment(payment._id)}
-                                                    className="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition-colors"
+                                                    className="px-6 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5"
                                                 >
-                                                    Reject
+                                                    <FaTimesCircle className="text-[11px]" /> Reject
                                                 </button>
                                             </div>
                                         </div>
@@ -459,7 +491,6 @@ const AdminDashboard = () => {
             </div>
         </div>
     );
-
 };
 
 export default AdminDashboard;
