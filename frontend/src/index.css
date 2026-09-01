@@ -67,4 +67,72 @@
     .card-hover {
         @apply hover:-translate-y-1 hover:shadow-lg transition-all duration-300 ease-out border border-transparent hover:border-gray-100;
     }
+
+    .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+    .hide-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+}
+
+@keyframes chat-pop {
+    0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes msg-in {
+    0% {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes bubble-in {
+    0% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes typing {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+    }
+    30% {
+        transform: translateY(-4px);
+        opacity: 1;
+    }
+}
+
+.animate-chat-pop {
+    animation: chat-pop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-msg-in {
+    animation: msg-in 0.3s ease-out;
+}
+
+.animate-bubble-in {
+    animation: bubble-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-typing {
+    animation: typing 1.2s infinite ease-in-out;
 }
