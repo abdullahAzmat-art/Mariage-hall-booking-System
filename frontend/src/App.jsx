@@ -14,6 +14,7 @@ import PageTransition from './components/PageTransition';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import Policy from './pages/Policy';
+import AiPlanner from './pages/AiPlanner';
 
 // Placeholder components for routes not yet implemented
 const NotFound = () => <div className="p-20 text-center text-2xl">404 - Page Not Found</div>;
@@ -45,6 +46,7 @@ function AppRoutes() {
         <Route path="/halls" element={<Halls />} />
         <Route path="/halls/:id" element={<HallDetails />} />
         <Route path="/packages" element={<Packages />} />
+        <Route path="/ai-planner" element={<AiPlanner />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route
