@@ -32,7 +32,8 @@ import { checkHallsNode }  from "../nodes/checkHallsNode.js";
  * @returns {"rag" | "calculation" | "check_halls"}
  */
 function routeAfterEvaluator(state) {
-  const route = state.route;
+  // intent and route are both set by the evaluator — use either
+  const route = state.intent || state.route;
   console.log(`\n🔀 [ROUTER] Directing to → "${route}"`);
 
   if (route === "calculation") return "calculation";

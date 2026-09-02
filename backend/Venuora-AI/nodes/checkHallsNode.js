@@ -12,7 +12,8 @@
  * @returns {Partial<import('../graph/state.js').VenuoraState>}
  */
 export async function checkHallsNode(state) {
-  console.log("\n🏛️  [CHECK_HALLS] Handling query:", state.userQuery);
+  const question = state.question || state.userQuery || "";
+  console.log("\n🏛️  [CHECK_HALLS] Handling question:", question);
 
   // ── DUMMY AVAILABILITY DATA ───────────────────────────────────
   // TODO: Replace with real MongoDB / Mongoose query
@@ -37,7 +38,8 @@ export async function checkHallsNode(state) {
   console.log("🏛️  [CHECK_HALLS] Hall availability fetched.");
 
   return {
-    finalAnswer: hallsAnswer,
+    halls: availableHalls,          // ← populate state.halls[]
+    answer: hallsAnswer,            // ← human-readable answer
     checkHallsOutput: hallsAnswer,
   };
 }

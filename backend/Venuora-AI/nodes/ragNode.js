@@ -13,7 +13,8 @@
  * @returns {Partial<import('../graph/state.js').VenuoraState>}
  */
 export async function ragNode(state) {
-  console.log("\n📚 [RAG] Handling query:", state.userQuery);
+  const question = state.question || state.userQuery || "";
+  console.log("\n📚 [RAG] Handling question:", question);
 
   // ── DUMMY RESPONSE ───────────────────────────────────────────
   // TODO: Replace with real vector-store retrieval + LLM generation
@@ -28,7 +29,7 @@ export async function ragNode(state) {
   console.log("📚 [RAG] Answer generated.");
 
   return {
-    finalAnswer: ragAnswer,
+    answer: ragAnswer,
     ragOutput: ragAnswer,
   };
 }

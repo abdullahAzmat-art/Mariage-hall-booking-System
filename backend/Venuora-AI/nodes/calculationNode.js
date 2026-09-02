@@ -12,7 +12,8 @@
  * @returns {Partial<import('../graph/state.js').VenuoraState>}
  */
 export async function calculationNode(state) {
-  console.log("\n🧮 [CALCULATION] Handling query:", state.userQuery);
+  const question = state.question || state.userQuery || "";
+  console.log("\n🧮 [CALCULATION] Handling question:", question);
 
   // ── DUMMY PRICING LOGIC ───────────────────────────────────────
   // TODO: Replace with real pricing model / LLM tool call
@@ -35,7 +36,7 @@ export async function calculationNode(state) {
   console.log("🧮 [CALCULATION] Pricing calculated.");
 
   return {
-    finalAnswer: calcAnswer,
+    answer: calcAnswer,
     calculationOutput: calcAnswer,
   };
 }
