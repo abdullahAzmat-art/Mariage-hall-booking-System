@@ -2,69 +2,69 @@
  * VENUORA-AI — Main LangGraph Workflow
  * ──────────────────────────────────────────────────────────────
  *
- * Workflow topology:
+ * Full topology:
  *
- *            START
- *              ↓
- *          EVALUATOR
- *              ↓
- *   ┌──────────┼──────────┐
- *   ↓          ↓          ↓
- *  RAG    CALCULATION  CHECK_HALLS
- *   └──────────┼──────────┘
- *              ↓
- *             END
+ *              ┌─────────┐
+ *    START ───►│EVALUATOR│
+ *              └────┬────┘
+ *                   │  state.intent (Zod-validated)
+ *                   │
+ *          routeByIntent()  ← conditional edge
+ *                   │
+ *       ┌───────────┼───────────┐
+ *       │           │           │
+ *  intent=rag  intent=    intent=
+ *       │      calculation  check_halls
+ *       ▼           ▼           ▼
+ *    ┌─────┐  ┌───────────┐ ┌──────────┐
+ *    │ RAG │  │CALCULATION│ │CHECK_HALL│
+ *    └──┬──┘  └─────┬─────┘ └────┬─────┘
+ *       │           │            │
+ *       └───────────┼────────────┘
+ *                   ▼
+ *                  END
  */
 
 import { StateGraph, START, END } from "@langchain/langgraph";
+
 import { VenuoraStateAnnotation } from "./state.js";
-import { evaluatorNode }   from "../nodes/evaluatorNode.js";
-import { ragNode }         from "../nodes/ragNode.js";
-import { calculationNode } from "../nodes/calculationNode.js";
-import { checkHallsNode }  from "../nodes/checkHallsNode.js";
-
-// ── ROUTING FUNCTION ────────────────────────────────────────────
-/**
- * Reads `state.route` (set by the EVALUATOR) and returns the name
- * of the next node to execute.
- *
- * @param {import('./state.js').VenuoraState} state
- * @returns {"rag" | "calculation" | "check_halls"}
- */
-function routeAfterEvaluator(state) {
-  // intent and route are both set by the evaluator — use either
-  const route = state.intent || state.route;
-  console.log(`\n🔀 [ROUTER] Directing to → "${route}"`);
-
-  if (route === "calculation") return "calculation";
-  if (route === "check_halls") return "check_halls";
-  return "rag"; // default fallback
-}
+import { routeByIntent }          from "./router.js";
+import { evaluatorNode }          from "../nodes/evaluatorNode.js";
+import { ragNode }                from "../nodes/ragNode.js";
+import { calculationNode }        from "../nodes/calculationNode.js";
+import { checkHallsNode }         from "../nodes/checkHallsNode.js";
 
 // ── BUILD THE GRAPH ─────────────────────────────────────────────
-const builder = new StateGraph(VenuoraStateAnnotation)
-  // Register nodes
+export const venuoraGraph = new StateGraph(VenuoraStateAnnotation)
+
+  // ── 1. Register every node ──────────────────────────────────
   .addNode("evaluator",   evaluatorNode)
   .addNode("rag",         ragNode)
   .addNode("calculation", calculationNode)
   .addNode("check_halls", checkHallsNode)
 
-  // Edges
+  // ── 2. Entry edge: START → EVALUATOR ───────────────────────
   .addEdge(START, "evaluator")
 
-  // Conditional fan-out after EVALUATOR
-  .addConditionalEdges("evaluator", routeAfterEvaluator, {
-    rag:          "rag",
-    calculation:  "calculation",
-    check_halls:  "check_halls",
-  })
+  // ── 3. Conditional fan-out: EVALUATOR → one of three nodes ─
+  //       routeByIntent() reads state.intent and returns the
+  //       node name; the map below translates it to the node.
+  .addConditionalEdges(
+    "evaluator",          // source node
+    routeByIntent,        // function that returns the branch key
+    {
+      rag:         "rag",         // intent="rag"         → ragNode
+      calculation: "calculation", // intent="calculation" → calculationNode
+      check_halls: "check_halls", // intent="check_halls" → checkHallsNode
+    }
+  )
 
-  // All leaf nodes lead to END
+  // ── 4. Exit edges: each leaf node → END ────────────────────
   .addEdge("rag",         END)
   .addEdge("calculation", END)
-  .addEdge("check_halls", END);
+  .addEdge("check_halls", END)
 
-// Compile into a runnable graph
-export const venuoraGraph = builder.compile();
+  // ── 5. Compile ──────────────────────────────────────────────
+  .compile();
 
 console.log("✅ [Venuora-AI] Graph compiled successfully.");

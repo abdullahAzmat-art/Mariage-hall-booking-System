@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
     FaUsers, FaMoneyBillWave, FaUserTie, FaTrash, FaBuilding, 
     FaEnvelope, FaReply, FaMapMarkerAlt, FaCheckCircle, FaTimesCircle,
-    FaClock, FaShieldAlt, FaStore
+    FaClock, FaShieldAlt, FaStore, FaDatabase, FaFileAlt,
+    FaFilePdf, FaFileWord, FaCloudUploadAlt, FaSpinner
 } from 'react-icons/fa';
 import userService from '../services/userService';
 import hallService from '../services/hallService';
 import commissionService from '../services/commissionService';
+import ragService from '../services/ragService';
 
 const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('users');
@@ -18,12 +20,21 @@ const AdminDashboard = () => {
     const [payments, setPayments] = useState([]);
     const [rejectionReasons, setRejectionReasons] = useState({});
 
+    // Knowledge Base state
+    const [knowledgeDocs, setKnowledgeDocs] = useState([]);
+    const [uploadStatus, setUploadStatus] = useState('idle'); // idle | uploading | success | error
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadMessage, setUploadMessage] = useState('');
+    const [dragOver, setDragOver] = useState(false);
+    const fileInputRef = useRef(null);
+
     useEffect(() => {
         if (activeTab === 'applications') fetchApplications();
         else if (activeTab === 'users') fetchUsers();
         else if (activeTab === 'halls') fetchHalls();
         else if (activeTab === 'complaints') fetchComplaints();
         else if (activeTab === 'commissions') fetchPayments();
+        else if (activeTab === 'knowledgeBase') fetchKnowledgeDocs();
     }, [activeTab]);
 
     const fetchApplications = async () => {
@@ -81,6 +92,57 @@ const AdminDashboard = () => {
         }
     };
 
+    // ── Knowledge Base handlers ──────────────────────────────────────────────
+    const fetchKnowledgeDocs = async () => {
+        try { const data = await ragService.getDocuments(); setKnowledgeDocs(data); }
+        catch (error) { console.error('Failed to fetch knowledge docs', error); }
+    };
+
+    const handleFileUpload = async (file) => {
+        if (!file) return;
+        const allowed = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+        if (!allowed.includes(file.type)) {
+            setUploadStatus('error');
+            setUploadMessage('Only PDF, DOCX, or TXT files are allowed.');
+            return;
+        }
+        setUploadStatus('uploading');
+        setUploadProgress(0);
+        setUploadMessage('');
+        try {
+            const result = await ragService.uploadDocument(file, (pct) => setUploadProgress(pct));
+            setUploadStatus('success');
+            setUploadMessage(`✅ "${result.document.originalName}" indexed — ${result.document.chunkCount} chunks stored in Qdrant`);
+            fetchKnowledgeDocs();
+            setTimeout(() => { setUploadStatus('idle'); setUploadProgress(0); setUploadMessage(''); }, 5000);
+        } catch (err) {
+            setUploadStatus('error');
+            setUploadMessage(err?.response?.data?.message || 'Upload failed. Please try again.');
+        }
+    };
+
+    const handleDropZoneDrop = (e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files[0];
+        if (file) handleFileUpload(file);
+    };
+
+    const handleDeleteKnowledgeDoc = async (docId) => {
+        if (!window.confirm('Delete this document and remove all its vectors from Qdrant?')) return;
+        try {
+            await ragService.deleteDocument(docId);
+            setKnowledgeDocs(knowledgeDocs.filter(d => d._id !== docId));
+        } catch { alert('Failed to delete document'); }
+    };
+
+    const fileTypeIcon = (type) => {
+        if (type === 'pdf') return <FaFilePdf className="text-red-500" />;
+        if (type === 'docx') return <FaFileWord className="text-blue-500" />;
+        return <FaFileAlt className="text-gray-500" />;
+    };
+    // ─────────────────────────────────────────────────────────────────────────
+
     const getInitials = (name) => (name || 'U')[0].toUpperCase();
     const roleBadge = (role) => {
         if (role === 'admin') return 'bg-navy text-white';
@@ -94,6 +156,7 @@ const AdminDashboard = () => {
         { id: 'halls', label: 'Venue Supervision', icon: FaBuilding },
         { id: 'complaints', label: 'Complaints', icon: FaEnvelope },
         { id: 'commissions', label: 'Commissions', icon: FaMoneyBillWave },
+        { id: 'knowledgeBase', label: 'Knowledge Base', icon: FaDatabase },
     ];
 
     const thCls = "px-4 py-3 text-xs font-bold uppercase tracking-wider text-left";
@@ -487,7 +550,142 @@ const AdminDashboard = () => {
                             </div>
                         )}
                     </div>
+                )}\n
+
+                {/* KNOWLEDGE BASE */}
+                {activeTab === 'knowledgeBase' && (
+                    <div>
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1 h-7 bg-terracotta rounded-full" />
+                            <h2 className="text-xl font-playfair font-bold text-navy">Knowledge Base</h2>
+                            <span className="ml-auto text-xs font-bold bg-navy/10 text-navy px-3 py-1 rounded-full">
+                                {knowledgeDocs.length} document{knowledgeDocs.length !== 1 ? 's' : ''}
+                            </span>
+                        </div>
+
+                        {/* Pipeline explanation */}
+                        <div className="mb-6 bg-navy/5 rounded-2xl p-4 flex flex-wrap gap-3 items-center justify-center text-xs font-bold text-navy/70">
+                            <span className="flex items-center gap-1.5"><FaCloudUploadAlt className="text-terracotta" /> Upload</span>
+                            <span className="text-gray-300">→</span>
+                            <span>Chunking</span>
+                            <span className="text-gray-300">→</span>
+                            <span>Embedding</span>
+                            <span className="text-gray-300">→</span>
+                            <span className="flex items-center gap-1.5"><FaDatabase className="text-emerald-500" /> Qdrant Vector DB</span>
+                        </div>
+
+                        {/* Drop Zone */}
+                        <div
+                            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                            onDragLeave={() => setDragOver(false)}
+                            onDrop={handleDropZoneDrop}
+                            onClick={() => uploadStatus !== 'uploading' && fileInputRef.current?.click()}
+                            className={`relative cursor-pointer border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-200 mb-6
+                                ${dragOver ? 'border-terracotta bg-terracotta/5 scale-[1.01]' : 'border-gray-200 bg-gray-50/60 hover:border-terracotta hover:bg-terracotta/5'}
+                                ${uploadStatus === 'uploading' ? 'pointer-events-none opacity-80' : ''}
+                            `}
+                        >
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".pdf,.docx,.txt"
+                                className="hidden"
+                                onChange={(e) => handleFileUpload(e.target.files[0])}
+                            />
+                            <div className="flex flex-col items-center gap-3">
+                                {uploadStatus === 'uploading' ? (
+                                    <FaSpinner className="text-4xl text-terracotta animate-spin" />
+                                ) : (
+                                    <FaCloudUploadAlt className={`text-4xl ${dragOver ? 'text-terracotta' : 'text-gray-300'}`} />
+                                )}
+                                <div>
+                                    <p className="text-navy font-bold text-sm">
+                                        {uploadStatus === 'uploading'
+                                            ? `Processing document... ${uploadProgress}%`
+                                            : 'Drag & drop a file here, or click to browse'}
+                                    </p>
+                                    <p className="text-gray-400 text-xs mt-1">Supports PDF, DOCX, TXT — max 20 MB</p>
+                                </div>
+                            </div>
+
+                            {/* Progress bar */}
+                            {uploadStatus === 'uploading' && (
+                                <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-200 rounded-b-2xl overflow-hidden">
+                                    <div
+                                        className="h-full bg-terracotta transition-all duration-300"
+                                        style={{ width: `${uploadProgress}%` }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Status message */}
+                        {uploadMessage && (
+                            <div className={`mb-6 px-5 py-3.5 rounded-xl text-sm font-medium flex items-start gap-3
+                                ${uploadStatus === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}
+                            `}>
+                                {uploadStatus === 'success'
+                                    ? <FaCheckCircle className="mt-0.5 shrink-0" />
+                                    : <FaTimesCircle className="mt-0.5 shrink-0" />
+                                }
+                                {uploadMessage}
+                            </div>
+                        )}
+
+                        {/* Documents list */}
+                        {knowledgeDocs.length === 0 ? (
+                            <div className="text-center py-12">
+                                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-300 text-3xl">
+                                    <FaDatabase />
+                                </div>
+                                <p className="text-gray-400 text-sm font-medium">No documents indexed yet.</p>
+                                <p className="text-gray-300 text-xs mt-1">Upload a file above to get started.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">Indexed Documents</p>
+                                {knowledgeDocs.map(doc => (
+                                    <div key={doc._id} className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-all">
+                                        <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-lg shrink-0">
+                                            {fileTypeIcon(doc.fileType)}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-navy font-bold text-sm truncate">{doc.name}</p>
+                                            <p className="text-gray-400 text-xs mt-0.5">{doc.originalName}</p>
+                                        </div>
+                                        <div className="flex items-center gap-4 shrink-0">
+                                            <div className="text-center hidden sm:block">
+                                                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Chunks</p>
+                                                <p className="text-navy font-bold text-sm">{doc.chunkCount}</p>
+                                            </div>
+                                            <div className="text-center hidden sm:block">
+                                                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Type</p>
+                                                <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full
+                                                    ${doc.fileType === 'pdf' ? 'bg-red-50 text-red-500' :
+                                                      doc.fileType === 'docx' ? 'bg-blue-50 text-blue-500' :
+                                                      'bg-gray-100 text-gray-500'}`}>
+                                                    {doc.fileType}
+                                                </span>
+                                            </div>
+                                            <div className="text-center hidden md:block">
+                                                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Uploaded</p>
+                                                <p className="text-gray-600 text-xs">{new Date(doc.uploadedAt).toLocaleDateString()}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteKnowledgeDoc(doc._id)}
+                                                className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                                                title="Delete document"
+                                            >
+                                                <FaTrash className="text-xs" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 )}
+
             </div>
         </div>
     );

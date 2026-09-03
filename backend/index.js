@@ -25,6 +25,7 @@ app.use('/api/complaints', require('./routes/complaintRoutes'));
 app.use('/api/chat', require('./routes/chatRoutes'));
 app.use('/api/commissions', require('./routes/commissionRoutes'));
 app.use('/api/utility', require('./routes/utilityRoutes'));
+app.use('/api/rag', require('./routes/ragRoutes'));
 
 const server = createServer(app);
 
