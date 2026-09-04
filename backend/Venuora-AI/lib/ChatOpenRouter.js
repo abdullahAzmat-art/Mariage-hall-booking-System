@@ -20,8 +20,10 @@ import { ChatOpenAI } from "@langchain/openai";
 export class ChatOpenRouter extends ChatOpenAI {
   constructor({ apiKey, model, temperature = 0, ...rest } = {}) {
     super({
-      openAIApiKey: apiKey,
-      modelName: model,
+      apiKey: apiKey || rest.openAIApiKey,
+      openAIApiKey: apiKey || rest.openAIApiKey,
+      model: model || rest.modelName,
+      modelName: model || rest.modelName,
       temperature,
       configuration: {
         baseURL: "https://openrouter.ai/api/v1",
