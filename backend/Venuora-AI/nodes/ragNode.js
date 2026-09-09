@@ -56,7 +56,7 @@ async function getVectorStore() {
 // ── 2. LLM & Prompt Template ─────────────────────────────────────────────────
 const llm = new ChatOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
-  model: "nvidia/nemotron-3-super-120b-a12b:free",
+  model: "openai/gpt-oss-120b",
   temperature: 0.2,
 });
 
@@ -111,7 +111,9 @@ export async function ragNode(state) {
       ragOutput: answer,
     };
   } catch (error) {
-    console.error("❌ [RAG Error]:", error.message);
+    const msg = error?.message ?? String(error ?? 'Unknown error');
+    console.error("❌ [RAG Error]:", msg);
+    console.error("❌ [RAG Full Error]:", error); // print full object so we can debug
     const fallback =
       "I encountered an error retrieving company knowledge. Please try again or reach out to our support team.";
     return {

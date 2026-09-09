@@ -48,7 +48,7 @@ export const EvaluatorOutputSchema = z.object({
 // ─────────────────────────────────────────────────────────────
 const rawModel = new ChatOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
-  model: "nvidia/nemotron-3-super-120b-a12b:free",
+  model: "openai/gpt-oss-120b",
   temperature: 0,
 });
 
@@ -68,22 +68,28 @@ const SYSTEM_PROMPT = `You are an intent classifier for Venuora, a marriage hall
 
 Classify the user's question into EXACTLY one of these intents:
 
-  rag          → General information, FAQs, policies, hall features, services, or anything knowledge-base related.
-  calculation  → Pricing, cost, budget, packages, per-head rates, or any numeric calculation.
-  check_halls  → Checking hall availability, booking a hall, selecting a date, or listing which halls are free.
+  rag          → General Venuora knowledge or FAQ
+  calculation  → Mathematical calculation
+  check_halls  → Searching or filtering event halls
 
 Rules:
-  • If you are unsure, default to "rag".
-  • Your "reasoning" field must be one short sentence.
+  - Questions asking for halls, venues, capacity, location, budget, date,
+    guests, amenities, menu, or availability → check_halls
+  - Mathematical questions → calculation
+  - General knowledge about Venuora → rag
+  - If unsure, default to "rag".
+  - Your "reasoning" field must be one short sentence.
 
 Examples:
   "What services do you offer?"                        → rag
   "Tell me about your decoration packages"             → rag
   "How much does it cost for 300 guests?"              → calculation
-  "What is the price of the premium package?"          → calculation
-  "Is the Grand Ballroom available on December 15?"    → check_halls
-  "I want to book a hall for my wedding"               → check_halls
-  "Show me available halls for next month"             → check_halls`;
+  "What is 500 multiplied by 1500?"                   → calculation
+  "Find me a hall in Lahore"                           → check_halls
+  "I need a venue for 500 guests under 2 lakh"        → check_halls
+  "Show me halls with parking and AC"                  → check_halls
+  "Is there a hall available on December 15?"          → check_halls
+  "I want a hall for my wedding with a buffet menu"    → check_halls`;
 
 // ─────────────────────────────────────────────────────────────
 // 5. NODE FUNCTION

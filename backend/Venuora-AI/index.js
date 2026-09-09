@@ -44,3 +44,5 @@ async function runTest(question) {
 await runTest("Tell me about your wedding hall packages");         // → rag
 await runTest("What is the total cost for 300 guests?");          // → calculation
 await runTest("Is the Grand Ballroom available on December 15?"); // → check_halls
+await runTest("I need a hall in Lahore for around 350 people with parking under 2 lakh."); // → check_halls with filters
+process.exit(0);

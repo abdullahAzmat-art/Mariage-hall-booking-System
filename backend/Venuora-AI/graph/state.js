@@ -61,14 +61,19 @@ export const VenuoraStateAnnotation = Annotation.Root({
    * @type {Array<object>}
    */
   halls: Annotation({
-    reducer: (prev, next) => {
-      // Allow a node to completely replace the list by returning an array,
-      // or append to it by returning a non-empty array
-      if (!next || next.length === 0) return prev;
-      return next;
-    },
+    reducer: (prev, next) => (next !== undefined ? next : prev),
     default: () => [],
   }),
+
+  /**
+   * Extracted user requirements for hall search (from checkHallsNode).
+   * @type {object|null}
+   */
+  requirements: Annotation({
+    reducer: (prev, next) => next ?? prev,
+    default: () => null,
+  }),
+
 
   /**
    * The single hall object the user has selected / confirmed.
@@ -129,6 +134,18 @@ export const VenuoraStateAnnotation = Annotation.Root({
 
   /** Raw output from the CHECK_HALLS node (for debugging). */
   checkHallsOutput: Annotation({
+    reducer: (prev, next) => next ?? prev,
+    default: () => null,
+  }),
+
+  /** Raw output / ranking reasoning from the AI_RANKER node (for debugging). */
+  rankerOutput: Annotation({
+    reducer: (prev, next) => next ?? prev,
+    default: () => null,
+  }),
+
+  /** Raw output / formatted display data from the VIEW_HALLS node for frontend consumption. */
+  viewHallsOutput: Annotation({
     reducer: (prev, next) => next ?? prev,
     default: () => null,
   }),

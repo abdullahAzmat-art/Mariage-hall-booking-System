@@ -20,12 +20,30 @@
  *    │ RAG │  │CALCULATION│ │CHECK_HALL│
  *    └──┬──┘  └─────┬─────┘ └────┬─────┘
  *       │           │            │
+ *       │           │            ▼
+ *       │           │       ┌─────────┐
+ *       │           │       │AI_RANKER│
+ *       │           │       └────┬────┘
+ *       │           │            │
+ *       │           │            ▼
+ *       │           │       ┌──────────┐
+ *       │           │       │VIEW_HALLS│
+ *       │           │       └────┬─────┘
+ *       │           │            │
+ *       │           │            ▼
+ *       │           │    ┌──────────────────┐
+ *       │           │    │ BOOKING_PROMPT   │  ← interrupt() waits for yes/no
+ *       │           │    └────────┬─────────┘
+ *       │           │            │
  *       └───────────┼────────────┘
  *                   ▼
  *                  END
+ *
+ * Uses MemorySaver checkpointer so state persists between HTTP
+ * requests on the same thread_id (required for interrupt/resume).
  */
 
-import { StateGraph, START, END } from "@langchain/langgraph";
+import { StateGraph, START, END, MemorySaver } from "@langchain/langgraph";
 
 import { VenuoraStateAnnotation } from "./state.js";
 import { routeByIntent }          from "./router.js";
@@ -33,38 +51,48 @@ import { evaluatorNode }          from "../nodes/evaluatorNode.js";
 import { ragNode }                from "../nodes/ragNode.js";
 import { calculationNode }        from "../nodes/calculationNode.js";
 import { checkHallsNode }         from "../nodes/checkHallsNode.js";
+import { aiRankerNode }           from "../nodes/aiRankerNode.js";
+import { viewHallsNode }          from "../nodes/viewHallsNode.js";
+import { bookingPromptNode }      from "../nodes/bookingPromptNode.js";
+
+// ── In-memory checkpointer — persists state between requests per thread ──
+const checkpointer = new MemorySaver();
 
 // ── BUILD THE GRAPH ─────────────────────────────────────────────
 export const venuoraGraph = new StateGraph(VenuoraStateAnnotation)
 
   // ── 1. Register every node ──────────────────────────────────
-  .addNode("evaluator",   evaluatorNode)
-  .addNode("rag",         ragNode)
-  .addNode("calculation", calculationNode)
-  .addNode("check_halls", checkHallsNode)
+  .addNode("evaluator",       evaluatorNode)
+  .addNode("rag",             ragNode)
+  .addNode("calculation",     calculationNode)
+  .addNode("check_halls",     checkHallsNode)
+  .addNode("ai_ranker",       aiRankerNode)
+  .addNode("view_halls",      viewHallsNode)
+  .addNode("booking_prompt",  bookingPromptNode)
 
   // ── 2. Entry edge: START → EVALUATOR ───────────────────────
   .addEdge(START, "evaluator")
 
   // ── 3. Conditional fan-out: EVALUATOR → one of three nodes ─
-  //       routeByIntent() reads state.intent and returns the
-  //       node name; the map below translates it to the node.
   .addConditionalEdges(
-    "evaluator",          // source node
-    routeByIntent,        // function that returns the branch key
+    "evaluator",
+    routeByIntent,
     {
-      rag:         "rag",         // intent="rag"         → ragNode
-      calculation: "calculation", // intent="calculation" → calculationNode
-      check_halls: "check_halls", // intent="check_halls" → checkHallsNode
+      rag:         "rag",
+      calculation: "calculation",
+      check_halls: "check_halls",
     }
   )
 
-  // ── 4. Exit edges: each leaf node → END ────────────────────
-  .addEdge("rag",         END)
-  .addEdge("calculation", END)
-  .addEdge("check_halls", END)
+  // ── 4. Node transitions & exit edges ───────────────────────
+  .addEdge("rag",            END)
+  .addEdge("calculation",    END)
+  .addEdge("check_halls",    "ai_ranker")
+  .addEdge("ai_ranker",      "view_halls")
+  .addEdge("view_halls",     "booking_prompt") // ← halls shown → ask to book
+  .addEdge("booking_prompt", END)
 
-  // ── 5. Compile ──────────────────────────────────────────────
-  .compile();
+  // ── 5. Compile with MemorySaver for human-in-the-loop ──────
+  .compile({ checkpointer });
 
-console.log("✅ [Venuora-AI] Graph compiled successfully.");
+console.log("✅ [Venuora-AI] Graph compiled successfully (with MemorySaver).");

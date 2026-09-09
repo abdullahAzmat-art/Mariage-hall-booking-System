@@ -4,43 +4,146 @@ const User = require('../models/userModel');
 const chatWithAI = async (req, res) => {
   try {
     const { message } = req.body;
-    const lowerMsg = message.toLowerCase();
 
-    let reply = "";
+    // Dynamically import the ES module graph
+    const { venuoraGraph } = await import('../Venuora-AI/graph/venuoraGraph.js');
 
-    // Rule-Based Logic
-    if (lowerMsg.includes("book") || lowerMsg.includes("booking")) {
-      reply = "To book a hall, browse our 'Halls' page, select your preferred venue, check availability for your date, and click 'Book Now'. You'll need to pay a 10% advance to confirm.";
-    } else if (lowerMsg.includes("price") || lowerMsg.includes("cost") || lowerMsg.includes("rates")) {
-      reply = "Prices vary by hall and capacity. You can use the price filter on the Halls page to find venues within your budget.";
-    } else if (lowerMsg.includes("pre-booking") || lowerMsg.includes("advance")) {
-      reply = "For pre-booking, a 10% advance payment is required. You can upload the payment proof directly in your dashboard after booking.";
-    } else if (lowerMsg.includes("filter") || lowerMsg.includes("search")) {
-      reply = "You can filter halls by Location, Capacity, and Price range on the Halls page to find the perfect match for your event.";
-    } else if (lowerMsg.includes("manager") || lowerMsg.includes("apply")) {
-      reply = "To apply as a manager, go to the 'Register' page and select 'Manager' as your role. Your application will be reviewed by the admin.";
-    } else if (lowerMsg.includes("verify") || lowerMsg.includes("verification")) {
-      reply = "Halls are verified by our admin team to ensure quality and authenticity before they are listed on the platform.";
-    } else if (lowerMsg.includes("calendar") || lowerMsg.includes("availability")) {
-      reply = "The availability calendar on each hall's detail page shows available (green) and booked (red) dates.";
-    } else if (lowerMsg.includes("commission")) {
-      reply = "We charge a standard commission of 8% on bookings to maintain the platform and services.";
-    } else if (lowerMsg.includes("hello") || lowerMsg.includes("hi") || lowerMsg.includes("hey")) {
-      reply = "Hello! I am your Marriage Hall Booking Assistant. How can I help you today?";
-    } else {
-      reply = "I'm sorry, I can only answer questions about booking, payments, filters, manager applications, and general platform policies. Please try rephrasing your question.";
-    }
+    const initialState = { question: message };
+    const finalState = await venuoraGraph.invoke(initialState);
 
-    // Simulate a small delay for "thinking" effect
-    setTimeout(() => {
-      res.json({ reply });
-    }, 500);
+    // finalState.answer holds the string response (or stringified JSON for halls)
+    res.json({ reply: finalState.answer });
 
   } catch (error) {
     console.error("Chat Error:", error);
     res.status(500).json({ reply: "Sorry, something went wrong. Please try again." });
   }
 };
+
+// ── Streaming SSE endpoint ────────────────────────────────────────
+const chatStreamWithAI = async (req, res) => {
+  // Set SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+
+  const send = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const { message, threadId } = req.body;
+    const { venuoraGraph } = await import('../Venuora-AI/graph/venuoraGraph.js');
+    const { Command }      = await import('@langchain/langgraph');
+
+    // Each conversation gets a persistent thread so MemorySaver can resume interrupts
+    const activeThreadId = threadId || crypto.randomUUID();
+    const config = { configurable: { thread_id: activeThreadId } };
+
+    // Tell the frontend which threadId to use for follow-up messages
+    send('thread', { threadId: activeThreadId });
+
+    // ── Detect if this thread is paused at an interrupt ──────
+    const currentState = await venuoraGraph.getState(config);
+    const isInterrupted = Array.isArray(currentState?.next) && currentState.next.length > 0;
+
+    // Choose: resume a paused graph OR start fresh
+    const streamInput = isInterrupted
+      ? new Command({ resume: message })
+      : { question: message };
+
+    const stream = await venuoraGraph.stream(streamInput, {
+      ...config,
+      streamMode: "updates", // yields per-node state patches
+    });
+
+    let finalAnswer = null;
+    let hallsPayload = null;
+    let interrupted  = false;
+
+    for await (const chunk of stream) {
+
+      // ── Interrupt fired (booking_prompt paused) ──────────
+      if (chunk.__interrupt__) {
+        const interruptMsg = chunk.__interrupt__[0]?.value ?? "Would you like to proceed?";
+        interrupted = true;
+
+        // If we found halls before the interrupt, send them now!
+        if (hallsPayload) {
+          send('halls', hallsPayload);
+          // Also optionally send the text from view_halls if it differs
+          if (finalAnswer && finalAnswer !== JSON.stringify(hallsPayload)) {
+            const CHUNK_SIZE = 3;
+            const DELAY_MS   = 18;
+            for (let i = 0; i < finalAnswer.length; i += CHUNK_SIZE) {
+              send('token', { text: finalAnswer.slice(i, i + CHUNK_SIZE) });
+              await new Promise((r) => setTimeout(r, DELAY_MS));
+            }
+          }
+        }
+
+        // Stream the interrupt question char by char
+        const CHUNK_SIZE = 3;
+        const DELAY_MS   = 18;
+        for (let i = 0; i < interruptMsg.length; i += CHUNK_SIZE) {
+          send('token', { text: interruptMsg.slice(i, i + CHUNK_SIZE) });
+          await new Promise((r) => setTimeout(r, DELAY_MS));
+        }
+
+        send('done', { threadId: activeThreadId, awaitingReply: true });
+        return res.end();
+      }
+
+      // ── Collect the latest answer from whichever node ran ─
+      const nodeOutput = Object.values(chunk)[0];
+      if (nodeOutput?.answer !== undefined) {
+        finalAnswer = nodeOutput.answer;
+      }
+      if (nodeOutput?.viewHallsOutput !== undefined) {
+        hallsPayload = nodeOutput.viewHallsOutput;
+      }
+    }
+
+    if (!finalAnswer && !hallsPayload) {
+      send('done', { threadId: activeThreadId });
+      return res.end();
+    }
+
+    if (hallsPayload) {
+      // Send the halls payload as an SSE event
+      send('halls', hallsPayload);
+      
+      // We can also send the text answer if there is one
+      if (finalAnswer && finalAnswer !== JSON.stringify(hallsPayload)) {
+        const CHUNK_SIZE = 3;
+        const DELAY_MS   = 18;
+        for (let i = 0; i < finalAnswer.length; i += CHUNK_SIZE) {
+          send('token', { text: finalAnswer.slice(i, i + CHUNK_SIZE) });
+          await new Promise((r) => setTimeout(r, DELAY_MS));
+        }
+      }
+    } else if (finalAnswer) {
+      // Stream plain text char by char
+      const CHUNK_SIZE = 3;
+      const DELAY_MS   = 18;
+      for (let i = 0; i < finalAnswer.length; i += CHUNK_SIZE) {
+        send('token', { text: finalAnswer.slice(i, i + CHUNK_SIZE) });
+        await new Promise((r) => setTimeout(r, DELAY_MS));
+      }
+    }
+
+    send('done', { threadId: activeThreadId, awaitingReply: false });
+    res.end();
+
+  } catch (error) {
+    console.error("Stream Chat Error:", error);
+    send('error', { message: "Sorry, something went wrong. Please try again." });
+    res.end();
+  }
+};
+
 
 const getMessages = async (req, res) => {
   try {
@@ -101,4 +204,4 @@ const getConversations = async (req, res) => {
   }
 };
 
-module.exports = { chatWithAI, getMessages, getConversations };
+module.exports = { chatWithAI, chatStreamWithAI, getMessages, getConversations };

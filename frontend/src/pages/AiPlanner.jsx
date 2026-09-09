@@ -12,6 +12,7 @@ import {
     FaCircle,
 } from 'react-icons/fa';
 import hallService from '../services/hallService';
+import api from '../api/axios';
 
 const formatTime = (date = new Date()) =>
     date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -34,27 +35,18 @@ const AiPlanner = () => {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
-
-    const [allHalls, setAllHalls] = useState([]);
+    const [hasSearched, setHasSearched] = useState(false);
     const [displayedHalls, setDisplayedHalls] = useState([]);
-    const [isSearchingHalls, setIsSearchingHalls] = useState(true);
+    const [isSearchingHalls, setIsSearchingHalls] = useState(false);
+    const [threadId, setThreadId] = useState(null);           // persists conversation thread
+    const [awaitingReply, setAwaitingReply] = useState(false); // true when booking prompt fired
 
     const inputRef = useRef(null);
     const messagesContainerRef = useRef(null);
 
+    // No need to pre-fetch all halls since AI backend does the search
     useEffect(() => {
-        const fetchHalls = async () => {
-            try {
-                const data = await hallService.getAllHalls();
-                setAllHalls(data);
-                setDisplayedHalls(data.slice(0, 3));
-                setIsSearchingHalls(false);
-            } catch (error) {
-                console.error('Failed to fetch halls', error);
-                setIsSearchingHalls(false);
-            }
-        };
-        fetchHalls();
+        // Initial setup complete
     }, []);
 
     const scrollToBottom = () => {
@@ -69,48 +61,7 @@ const AiPlanner = () => {
     }, [messages]);
 
     const filterHallsLocally = (query) => {
-        if (!allHalls.length) return;
-
-        setIsSearchingHalls(true);
-        const lowerQuery = query.toLowerCase();
-        let filtered = [...allHalls];
-
-        if (lowerQuery.includes('karachi')) {
-            filtered = filtered.filter((h) =>
-                h.location?.toLowerCase().includes('karachi')
-            );
-        }
-        if (lowerQuery.includes('lahore')) {
-            filtered = filtered.filter((h) =>
-                h.location?.toLowerCase().includes('lahore')
-            );
-        }
-        if (lowerQuery.includes('islamabad')) {
-            filtered = filtered.filter((h) =>
-                h.location?.toLowerCase().includes('islamabad')
-            );
-        }
-
-        const priceMatch = lowerQuery.match(
-            /(?:under|budget|max) (?:rs\s*)?(\d+)/
-        );
-        if (priceMatch && priceMatch[1]) {
-            const maxPrice = parseInt(priceMatch[1], 10);
-            filtered = filtered.filter((h) => h.price <= maxPrice);
-        }
-
-        const capMatch = lowerQuery.match(
-            /(?:for\s*)?(\d+)\s*(?:guests|people|pax)?/
-        );
-        if (capMatch && capMatch[1] && parseInt(capMatch[1], 10) > 100) {
-            const reqCap = parseInt(capMatch[1], 10);
-            filtered = filtered.filter((h) => h.capacity >= reqCap - 100);
-        }
-
-        setTimeout(() => {
-            setDisplayedHalls(filtered.slice(0, 3));
-            setIsSearchingHalls(false);
-        }, 800);
+        // Obsolete: Now we rely entirely on the backend AI Ranker!
     };
 
     const sendMessage = async (text) => {
@@ -123,41 +74,121 @@ const AiPlanner = () => {
         setLoading(true);
         setIsTyping(true);
 
-        filterHallsLocally(trimmed);
+        // Only show "searching" indicator if not in a booking yes/no reply
+        if (!awaitingReply) {
+            setIsSearchingHalls(true);
+            setHasSearched(true);
+        }
+
+        // Add an empty streaming bot message we'll fill live
+        setMessages((prev) => [...prev, { sender: 'bot', text: '', time: formatTime(), streaming: true }]);
 
         try {
-            const res = await axios.post(
-                'https://mariage-hall-booking-system.vercel.app/api/chat',
-                { message: trimmed }
-            );
+            const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-            setTimeout(() => {
-                setIsTyping(false);
-                setMessages((prev) => [
-                    ...prev,
-                    {
-                        sender: 'bot',
-                        text: res.data.reply ||
-                            "I've updated the suggested venues based on your preferences!",
-                        time: formatTime(),
-                    },
-                ]);
-                setLoading(false);
-            }, 1000);
-        } catch (error) {
-            console.error('Chat Error:', error);
+            const response = await fetch(`${API_BASE}/chat/stream`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // Always pass threadId so backend can resume interrupted state
+                body: JSON.stringify({ message: trimmed, threadId }),
+            });
+
+            if (!response.ok) throw new Error('Stream request failed');
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            const updateLastBotMsg = (updater) => {
+                setMessages((prev) => {
+                    const next = [...prev];
+                    const lastBotIdx = next.map(m => m.sender).lastIndexOf('bot');
+                    if (lastBotIdx !== -1) next[lastBotIdx] = updater(next[lastBotIdx]);
+                    return next;
+                });
+            };
+
             setIsTyping(false);
-            setMessages((prev) => [
-                ...prev,
-                {
-                    sender: 'bot',
-                    text: "I've filtered the venues, but couldn't reach the language model. Here are my best heuristic picks.",
-                    time: formatTime(),
-                },
-            ]);
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                let event = null;
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) {
+                        event = line.slice(7).trim();
+                    } else if (line.startsWith('data: ')) {
+                        const raw = line.slice(6).trim();
+                        try {
+                            const payload = JSON.parse(raw);
+
+                            if (event === 'thread') {
+                                // Store the thread ID for follow-up messages
+                                setThreadId(payload.threadId);
+
+                            } else if (event === 'token') {
+                                updateLastBotMsg((msg) => ({
+                                    ...msg,
+                                    text: msg.text + payload.text,
+                                }));
+
+                            } else if (event === 'halls') {
+                                setDisplayedHalls(payload.cards || []);
+                                setIsSearchingHalls(false);
+                                updateLastBotMsg((msg) => ({
+                                    ...msg,
+                                    text: payload.message || 'Here are your suggested venues!',
+                                    streaming: false,
+                                }));
+
+                            } else if (event === 'done') {
+                                setIsSearchingHalls(false);
+                                // awaitingReply = true means booking_prompt just interrupted
+                                setAwaitingReply(payload.awaitingReply === true);
+                                updateLastBotMsg((msg) => ({ ...msg, streaming: false }));
+
+                            } else if (event === 'error') {
+                                updateLastBotMsg((msg) => ({
+                                    ...msg,
+                                    text: payload.message || 'Something went wrong.',
+                                    streaming: false,
+                                }));
+                                setIsSearchingHalls(false);
+                                setAwaitingReply(false);
+                            }
+                        } catch (_) { /* ignore malformed lines */ }
+                        event = null;
+                    }
+                }
+            }
+
+        } catch (error) {
+            console.error('Stream Chat Error:', error);
+            setIsTyping(false);
+            setIsSearchingHalls(false);
+            setAwaitingReply(false);
+            setMessages((prev) => {
+                const next = [...prev];
+                const lastBotIdx = next.map(m => m.sender).lastIndexOf('bot');
+                if (lastBotIdx !== -1) {
+                    next[lastBotIdx] = {
+                        ...next[lastBotIdx],
+                        text: "I couldn't reach the AI planner. Please try again later.",
+                        streaming: false,
+                    };
+                }
+                return next;
+            });
+        } finally {
             setLoading(false);
         }
     };
+
 
     const handleSend = (e) => {
         e.preventDefault();
@@ -219,6 +250,9 @@ const AiPlanner = () => {
                                             }`}
                                         >
                                             {msg.text}
+                                            {msg.streaming && (
+                                                <span className="inline-block w-[2px] h-[1em] bg-gold ml-0.5 align-middle animate-pulse" />
+                                            )}
                                         </div>
                                         <span className="text-[10px] text-gray-400 mt-1.5 px-1 font-medium">
                                             {msg.time}
@@ -310,7 +344,16 @@ const AiPlanner = () => {
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-6">
-                            {isSearchingHalls ? (
+                            {!hasSearched ? (
+                                <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
+                                    <FaSearch className="text-4xl text-gray-300" />
+                                    <p className="text-lg font-medium text-center">
+                                        Tell me about your dream venue!
+                                        <br />
+                                        I'll search for the perfect match.
+                                    </p>
+                                </div>
+                            ) : isSearchingHalls ? (
                                 <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
                                     <FaMagic className="text-4xl animate-pulse text-gold/50" />
                                     <p className="text-lg font-medium">
@@ -318,20 +361,18 @@ const AiPlanner = () => {
                                     </p>
                                 </div>
                             ) : displayedHalls.length > 0 ? (
-                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                <div className="flex flex-col gap-5">
                                     {displayedHalls.map((hall) => {
-                                        const imageUrl = hall.image?.startsWith(
-                                            'http'
-                                        )
+                                        const imageUrl = hall.image?.startsWith('http')
                                             ? hall.image
                                             : `https://mariage-hall-booking-system.vercel.app/${hall.image}`;
 
                                         return (
                                             <div
                                                 key={hall._id}
-                                                className="bg-white rounded-3xl overflow-hidden shadow-md border border-gray-100 hover:shadow-xl transition-all group"
+                                                className="bg-white rounded-3xl overflow-hidden shadow-md border border-gray-100 hover:shadow-xl transition-all group flex flex-col sm:flex-row h-auto sm:h-52"
                                             >
-                                                <div className="h-48 relative overflow-hidden bg-gray-100">
+                                                <div className="w-full sm:w-2/5 relative overflow-hidden bg-gray-100 h-48 sm:h-full">
                                                     <img
                                                         src={imageUrl}
                                                         alt={hall.name}
@@ -339,32 +380,44 @@ const AiPlanner = () => {
                                                     />
                                                     <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm">
                                                         <span className="font-bold text-gold">
-                                                            Rs{' '}
-                                                            {hall.price?.toLocaleString()}
+                                                            Rs {hall.price?.toLocaleString()}
                                                         </span>
                                                     </div>
+                                                    {hall.matchScore && (
+                                                        <div className="absolute top-4 left-4 bg-navy/90 text-white backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm text-xs font-bold">
+                                                            {hall.matchScore}% Match
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <div className="p-5">
-                                                    <h3 className="text-xl font-playfair font-bold text-navy mb-3 group-hover:text-gold transition-colors">
-                                                        {hall.name}
-                                                    </h3>
-                                                    <div className="space-y-2 mb-5">
-                                                        <div className="flex items-center text-sm text-gray-600 gap-2">
-                                                            <FaMapMarkerAlt className="text-gold opacity-70" />{' '}
-                                                            {hall.location}
+                                                <div className="w-full sm:w-3/5 p-5 flex flex-col justify-between">
+                                                    <div>
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <h3 className="text-xl font-playfair font-bold text-navy group-hover:text-gold transition-colors line-clamp-1">
+                                                                {hall.name}
+                                                            </h3>
                                                         </div>
-                                                        <div className="flex items-center text-sm text-gray-600 gap-2">
-                                                            <FaUsers className="text-gold opacity-70" />{' '}
-                                                            {hall.capacity}{' '}
-                                                            guests capacity
+                                                        <div className="flex flex-wrap items-center text-sm text-gray-600 gap-4 mb-3">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <FaMapMarkerAlt className="text-gold opacity-70" /> {hall.location}
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <FaUsers className="text-gold opacity-70" /> {hall.capacity} pax
+                                                            </div>
                                                         </div>
+                                                        {hall.matchReason && (
+                                                            <p className="text-xs text-gray-500 italic line-clamp-2 border-l-2 border-gold/30 pl-2">
+                                                                "{hall.matchReason}"
+                                                            </p>
+                                                        )}
                                                     </div>
-                                                    <Link
-                                                        to={`/halls/${hall._id}`}
-                                                        className="block w-full text-center py-2.5 rounded-xl border-2 border-navy text-navy font-bold hover:bg-navy hover:text-white transition-colors"
-                                                    >
-                                                        View Details
-                                                    </Link>
+                                                    <div className="mt-4 sm:mt-0 flex justify-end">
+                                                        <Link
+                                                            to={`/halls/${hall._id}`}
+                                                            className="px-6 py-2 rounded-xl border-2 border-navy text-navy font-bold hover:bg-navy hover:text-white transition-colors text-sm"
+                                                        >
+                                                            View Details
+                                                        </Link>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
