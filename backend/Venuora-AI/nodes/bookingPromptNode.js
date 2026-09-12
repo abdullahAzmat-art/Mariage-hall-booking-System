@@ -23,35 +23,57 @@ import { interrupt } from "@langchain/langgraph";
 export function bookingPromptNode(state) {
   const halls = state.halls || [];
 
-  // ── Pause graph and ask user ────────────────────────────────
-  const userReply = interrupt(
-    halls.length > 0
-      ? `Would you like to book one of these halls? Reply **yes** to proceed or **no** to keep browsing.`
-      : `Would you like help with anything else?`
-  );
+  // 1. Prepare the question based on how many halls there are
+  let promptMessage = "";
+  if (halls.length === 1) {
+    promptMessage = `Would you like to book **${halls[0].name}**? Reply **yes** to proceed or **no** to keep browsing.`;
+  } else {
+    promptMessage = `Would you like to book one of these halls? Please reply with the **hall name** you want to book (e.g., "${halls[0].name}"), or **no** to keep browsing.`;
+  }
 
-  // ── Resume: evaluate user's reply ──────────────────────────
+  // 2. Pause the graph and ask the user
+  const userReply = interrupt(promptMessage);
   const reply = typeof userReply === "string" ? userReply.toLowerCase().trim() : "";
-  const wantsBooking = /\b(yes|yeah|yep|sure|okay|ok|book|proceed|confirm|yup)\b/.test(reply);
 
-  console.log(`\n📋 [BOOKING_PROMPT] User replied: "${userReply}" → wantsBooking=${wantsBooking}`);
+  let wantsBooking = false;
+  let selectedHall = null;
 
-  if (!wantsBooking) {
+  // 3. Figure out their answer
+  if (halls.length === 1) {
+    wantsBooking = /\b(yes|yeah|yep|sure|okay|ok|book|proceed|confirm|yup)\b/.test(reply);
+    if (wantsBooking) selectedHall = halls[0];
+  } else if (halls.length > 1) {
+    // Check if they typed a specific hall's name
+    selectedHall = halls.find(h => reply.includes(h.name.toLowerCase()));
+    
+    if (selectedHall) {
+      wantsBooking = true;
+    } else {
+      // If they just said "yes" but didn't give a name, ask them again!
+      const saidYes = /\b(yes|yeah|yep|sure|okay|ok|book)\b/.test(reply);
+      if (saidYes) {
+        let followUpReply = interrupt("Which hall would you like to book? Please tell me the name.");
+        followUpReply = typeof followUpReply === "string" ? followUpReply.toLowerCase().trim() : "";
+        selectedHall = halls.find(h => followUpReply.includes(h.name.toLowerCase()));
+        if (selectedHall) wantsBooking = true;
+      }
+    }
+  }
+
+  console.log(`\n📋 [BOOKING_PROMPT] User replied: "${userReply}" → wantsBooking=${wantsBooking}, selectedHall=${selectedHall?.name}`);
+
+  // 4. If they said no or we still couldn't find the hall
+  if (!wantsBooking || !selectedHall) {
     return {
       approval: false,
       answer: "No problem! Feel free to explore more venues or ask me anything else. 😊",
     };
   }
 
-  // User wants to book — guide them to pick a hall and date
-  const hallNames = halls.map((h, i) => `${i + 1}. ${h.name} (${h.location})`).join("\n");
-  const bookingGuide =
-    halls.length === 1
-      ? `Great choice! 🎉 Let's book **${halls[0].name}**. Please visit the hall's detail page and click "Book Now" to select your date and confirm the booking.`
-      : `Fantastic! 🎉 Here are your options:\n\n${hallNames}\n\nJust visit any hall's detail page and click **"Book Now"** to select your date and confirm your booking.`;
-
+  // 5. If successful, move forward and store the selected hall!
   return {
     approval: true,
-    answer: bookingGuide,
+    selectedHall: selectedHall,
+    answer: `Great choice! Preparing the booking form for **${selectedHall.name}**...`,
   };
 }

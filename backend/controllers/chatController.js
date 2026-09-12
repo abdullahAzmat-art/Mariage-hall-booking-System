@@ -1,149 +1,132 @@
-const Message = require('../models/messageModel');
+﻿const Message = require('../models/messageModel');
 const User = require('../models/userModel');
 
 const chatWithAI = async (req, res) => {
   try {
     const { message } = req.body;
-
-    // Dynamically import the ES module graph
     const { venuoraGraph } = await import('../Venuora-AI/graph/venuoraGraph.js');
-
     const initialState = { question: message };
     const finalState = await venuoraGraph.invoke(initialState);
-
-    // finalState.answer holds the string response (or stringified JSON for halls)
     res.json({ reply: finalState.answer });
-
   } catch (error) {
     console.error("Chat Error:", error);
     res.status(500).json({ reply: "Sorry, something went wrong. Please try again." });
   }
 };
 
-// ── Streaming SSE endpoint ────────────────────────────────────────
+// Streaming SSE endpoint
 const chatStreamWithAI = async (req, res) => {
-  // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.flushHeaders();
 
+  // FIX 1: Only write if connection is still open
   const send = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (!res.writableEnded) {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    }
   };
+
+  // FIX 2: Safe token streamer — stops if client disconnects mid-stream
+  const safeStreamText = async (text) => {
+    const CHUNK_SIZE = 3;
+    const DELAY_MS = 18;
+    for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+      if (res.writableEnded) return;
+      send('token', { text: text.slice(i, i + CHUNK_SIZE) });
+      await new Promise((r) => setTimeout(r, DELAY_MS));
+    }
+  };
+
+  // FIX 3: Catch ECONNRESET at socket level so nodemon never crashes
+  req.socket.on('error', (err) => {
+    if (err.code === 'ECONNRESET') {
+      console.warn("Client disconnected (ECONNRESET) - safe to ignore.");
+    }
+  });
 
   try {
     const { message, threadId } = req.body;
     const { venuoraGraph } = await import('../Venuora-AI/graph/venuoraGraph.js');
-    const { Command }      = await import('@langchain/langgraph');
+    const { Command } = await import('@langchain/langgraph');
 
-    // Each conversation gets a persistent thread so MemorySaver can resume interrupts
     const activeThreadId = threadId || crypto.randomUUID();
     const config = { configurable: { thread_id: activeThreadId } };
 
-    // Tell the frontend which threadId to use for follow-up messages
     send('thread', { threadId: activeThreadId });
 
-    // ── Detect if this thread is paused at an interrupt ──────
     const currentState = await venuoraGraph.getState(config);
     const isInterrupted = Array.isArray(currentState?.next) && currentState.next.length > 0;
 
-    // Choose: resume a paused graph OR start fresh
     const streamInput = isInterrupted
       ? new Command({ resume: message })
       : { question: message };
 
     const stream = await venuoraGraph.stream(streamInput, {
       ...config,
-      streamMode: "updates", // yields per-node state patches
+      streamMode: "updates",
     });
 
-    let finalAnswer = null;
-    let hallsPayload = null;
-    let interrupted  = false;
+    let finalAnswer        = null;
+    let hallsPayload       = null;
+    let bookingFormPayload = null;
 
     for await (const chunk of stream) {
 
-      // ── Interrupt fired (booking_prompt paused) ──────────
+      // Interrupt fired (graph paused, waiting for user reply)
       if (chunk.__interrupt__) {
         const interruptMsg = chunk.__interrupt__[0]?.value ?? "Would you like to proceed?";
-        interrupted = true;
 
-        // If we found halls before the interrupt, send them now!
         if (hallsPayload) {
           send('halls', hallsPayload);
-          // Also optionally send the text from view_halls if it differs
-          if (finalAnswer && finalAnswer !== JSON.stringify(hallsPayload)) {
-            const CHUNK_SIZE = 3;
-            const DELAY_MS   = 18;
-            for (let i = 0; i < finalAnswer.length; i += CHUNK_SIZE) {
-              send('token', { text: finalAnswer.slice(i, i + CHUNK_SIZE) });
-              await new Promise((r) => setTimeout(r, DELAY_MS));
-            }
-          }
+          if (finalAnswer) await safeStreamText(finalAnswer);
         }
 
-        // Stream the interrupt question char by char
-        const CHUNK_SIZE = 3;
-        const DELAY_MS   = 18;
-        for (let i = 0; i < interruptMsg.length; i += CHUNK_SIZE) {
-          send('token', { text: interruptMsg.slice(i, i + CHUNK_SIZE) });
-          await new Promise((r) => setTimeout(r, DELAY_MS));
-        }
+        await safeStreamText(interruptMsg);
 
         send('done', { threadId: activeThreadId, awaitingReply: true });
-        return res.end();
+        if (!res.writableEnded) res.end();
+        return;
       }
 
-      // ── Collect the latest answer from whichever node ran ─
       const nodeOutput = Object.values(chunk)[0];
-      if (nodeOutput?.answer !== undefined) {
-        finalAnswer = nodeOutput.answer;
-      }
-      if (nodeOutput?.viewHallsOutput !== undefined) {
-        hallsPayload = nodeOutput.viewHallsOutput;
-      }
+      if (nodeOutput?.answer !== undefined)            finalAnswer        = nodeOutput.answer;
+      if (nodeOutput?.viewHallsOutput !== undefined)   hallsPayload       = nodeOutput.viewHallsOutput;
+      if (nodeOutput?.bookingFormOutput !== undefined) bookingFormPayload = nodeOutput.bookingFormOutput;
     }
 
-    if (!finalAnswer && !hallsPayload) {
+    if (!finalAnswer && !hallsPayload && !bookingFormPayload) {
       send('done', { threadId: activeThreadId });
-      return res.end();
+      if (!res.writableEnded) res.end();
+      return;
     }
 
-    if (hallsPayload) {
-      // Send the halls payload as an SSE event
+    if (bookingFormPayload) {
+      send('booking_form', bookingFormPayload);
+      if (finalAnswer) await safeStreamText(finalAnswer);
+    } else if (hallsPayload) {
       send('halls', hallsPayload);
-      
-      // We can also send the text answer if there is one
-      if (finalAnswer && finalAnswer !== JSON.stringify(hallsPayload)) {
-        const CHUNK_SIZE = 3;
-        const DELAY_MS   = 18;
-        for (let i = 0; i < finalAnswer.length; i += CHUNK_SIZE) {
-          send('token', { text: finalAnswer.slice(i, i + CHUNK_SIZE) });
-          await new Promise((r) => setTimeout(r, DELAY_MS));
-        }
-      }
+      if (finalAnswer) await safeStreamText(finalAnswer);
     } else if (finalAnswer) {
-      // Stream plain text char by char
-      const CHUNK_SIZE = 3;
-      const DELAY_MS   = 18;
-      for (let i = 0; i < finalAnswer.length; i += CHUNK_SIZE) {
-        send('token', { text: finalAnswer.slice(i, i + CHUNK_SIZE) });
-        await new Promise((r) => setTimeout(r, DELAY_MS));
-      }
+      await safeStreamText(finalAnswer);
     }
 
     send('done', { threadId: activeThreadId, awaitingReply: false });
-    res.end();
+    if (!res.writableEnded) res.end();
 
   } catch (error) {
+    // ECONNRESET = user closed browser tab mid-stream, NOT a real crash
+    if (error.code === 'ECONNRESET' || error.code === 'ERR_HTTP_HEADERS_SENT') {
+      console.warn("Client disconnected early - safe to ignore.");
+      return;
+    }
     console.error("Stream Chat Error:", error);
     send('error', { message: "Sorry, something went wrong. Please try again." });
-    res.end();
+    if (!res.writableEnded) res.end();
   }
 };
-
 
 const getMessages = async (req, res) => {
   try {
@@ -165,7 +148,6 @@ const getConversations = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Find all messages involving the user
     const messages = await Message.find({
       $or: [{ fromUserId: userId }, { toUserId: userId }]
     }).sort({ timestamp: -1 });
@@ -174,7 +156,6 @@ const getConversations = async (req, res) => {
 
     for (const msg of messages) {
       const partnerId = msg.fromUserId.toString() === userId ? msg.toUserId.toString() : msg.fromUserId.toString();
-
       if (!conversationsMap.has(partnerId)) {
         conversationsMap.set(partnerId, {
           lastMessage: msg.message,

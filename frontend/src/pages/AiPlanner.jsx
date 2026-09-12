@@ -24,6 +24,219 @@ const SUGGESTIONS = [
     'What are the best outdoor venues?',
 ];
 
+// InlineBookingForm now receives the threadId so it can RESUME the graph with the submitted data
+const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
+    const [guestsCount, setGuestsCount] = useState('');
+    const [eventDate, setEventDate] = useState('');
+    const [eventType, setEventType] = useState('Wedding');
+    const [phone, setPhone] = useState('');
+    const [cnic, setCnic] = useState('');
+    const [selectedFood, setSelectedFood] = useState({});
+    
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    const hallPrice = Number(bookingForm.hallPrice) || 0;
+    const hallMenu = bookingForm.hallMenu || [];
+    
+    const customSeatPrice = hallMenu.reduce((total, item) => {
+        return selectedFood[item.name] ? total + Number(item.price) : total;
+    }, 0);
+    
+    const finalPricePerHead = hallPrice + customSeatPrice;
+    const totalAmount = (Number(guestsCount) || 0) * finalPricePerHead;
+    const prebookingAmount = totalAmount * 0.2;
+    
+    const handleFoodToggle = (itemName) => {
+        setSelectedFood(prev => ({ ...prev, [itemName]: !prev[itemName] }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        try {
+            // Build the form data payload
+            const customFoodPayload = hallMenu
+                .filter(item => selectedFood[item.name])
+                .map(item => ({ itemName: item.name, price: item.price, quantity: Number(guestsCount) }));
+
+            const formData = {
+                customerId:    JSON.parse(localStorage.getItem('user'))?._id || '',
+                eventDate,
+                eventType,
+                phone,
+                cnic,
+                guestsCount:   Number(guestsCount),
+                customSeatPrice,
+                customFood:    customFoodPayload,
+            };
+
+            // ✅ Instead of calling bookingService directly, we RESUME the LangGraph
+            // with the form data as a JSON string. The graph will then:
+            //   bookingRequirementsNode (receives data) → createBookingNode (saves to DB)
+            const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+            const response = await fetch(`${API_BASE}/chat/stream`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // Send the form data as the "message" so the graph resumes with it
+                body: JSON.stringify({ message: JSON.stringify(formData), threadId }),
+            });
+
+            if (!response.ok) throw new Error('Failed to resume graph');
+
+            // Read the streamed response to get the confirmation message
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let confirmationText = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                let event = null;
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) event = line.slice(7).trim();
+                    else if (line.startsWith('data: ')) {
+                        try {
+                            const payload = JSON.parse(line.slice(6).trim());
+                            if (event === 'token') confirmationText += payload.text;
+                        } catch (_) {}
+                        event = null;
+                    }
+                }
+            }
+
+            // Notify parent with the AI confirmation message
+            if (onBookingConfirmed) onBookingConfirmed(confirmationText || 'Booking confirmed!');
+
+        } catch (error) {
+            console.error("Booking error:", error);
+            alert("Failed to submit booking. Please try again.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (isSuccess) {
+        return (
+            <div className="mt-4 p-5 bg-green-50 rounded-2xl border border-green-100 shadow-sm w-full min-w-[280px] text-center">
+                <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl">✓</div>
+                <h4 className="font-bold text-green-800 mb-1">Booking Confirmed!</h4>
+                <p className="text-sm text-green-700">Your reservation for {bookingForm.hallName} has been submitted.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-4 p-5 bg-white rounded-2xl border border-gray-100 shadow-md w-full min-w-[280px] font-body">
+            <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+                <h4 className="font-bold text-navy text-lg">{bookingForm.hallName}</h4>
+                <span className="text-gold font-bold text-sm bg-gold/10 px-2 py-1 rounded-lg">Rs {hallPrice.toLocaleString()} / base</span>
+            </div>
+            
+            <form className="space-y-4" onSubmit={handleSubmit}>
+                {/* Basic Details */}
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-xs font-bold text-navy mb-1.5 uppercase tracking-wide">Event Date</label>
+                        <input type="date" required value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-navy mb-1.5 uppercase tracking-wide">Guests</label>
+                        <input type="number" required min="1" placeholder="e.g. 200" value={guestsCount} onChange={(e) => setGuestsCount(e.target.value)} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all" />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                    <div>
+                        <label className="block text-xs font-bold text-navy mb-1.5 uppercase tracking-wide">Event Type</label>
+                        <select value={eventType} onChange={(e) => setEventType(e.target.value)} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all">
+                            <option value="Wedding">Wedding</option>
+                            <option value="Engagement">Engagement</option>
+                            <option value="Birthday">Birthday</option>
+                            <option value="Corporate">Corporate</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-xs font-bold text-navy mb-1.5 uppercase tracking-wide">Phone No.</label>
+                        <input type="tel" required placeholder="03XXXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-navy mb-1.5 uppercase tracking-wide">CNIC</label>
+                        <input type="text" required placeholder="12345-1234567-1" value={cnic} onChange={(e) => setCnic(e.target.value)} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all" />
+                    </div>
+                </div>
+
+                {/* Custom Food Options */}
+                <div className="border border-gray-100 rounded-xl p-3 bg-gray-50 mt-2">
+                    <h5 className="text-sm font-bold text-navy mb-2 flex items-center gap-2"><FaTag className="text-gold" /> Customize Food Menu</h5>
+                    {hallMenu.length > 0 ? (
+                        <div className="space-y-2 max-h-32 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200">
+                            {hallMenu.map((item, idx) => (
+                                <label key={idx} className="flex items-center justify-between bg-white p-2 border border-gray-100 rounded-lg cursor-pointer hover:border-gold/50 transition-colors">
+                                    <div className="flex items-center gap-2">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={!!selectedFood[item.name]}
+                                            onChange={() => handleFoodToggle(item.name)}
+                                            className="w-4 h-4 text-gold rounded border-gray-300 focus:ring-gold"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">{item.name}</span>
+                                    </div>
+                                    <span className="text-xs font-bold text-navy">+Rs {item.price}</span>
+                                </label>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-gray-400 italic">No custom menu items available for this hall.</p>
+                    )}
+                    <div className="mt-2 pt-2 border-t border-gray-200/60 flex justify-between text-xs">
+                        <span className="font-medium text-gray-500">Extra Food Cost:</span>
+                        <span className="font-bold text-gold">+ Rs {customSeatPrice} / head</span>
+                    </div>
+                </div>
+
+                {/* Summary */}
+                <div className="bg-navy/5 p-4 rounded-xl border border-navy/10 space-y-2 mt-4">
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-navy font-medium">Final Price / Guest:</span>
+                        <span className="font-bold text-navy">Rs {finalPricePerHead.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm pt-2 border-t border-navy/10">
+                        <span className="text-navy font-bold">Total Amount:</span>
+                        <span className="font-bold text-navy text-lg">Rs {totalAmount.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs pt-1">
+                        <span className="text-gray-500 font-medium">Pre-booking to pay (20%):</span>
+                        <span className="font-bold text-gold">Rs {prebookingAmount.toLocaleString()}</span>
+                    </div>
+                </div>
+
+                <button 
+                    type="submit" 
+                    disabled={isSubmitting || totalAmount <= 0}
+                    className="w-full py-3 bg-navy text-white rounded-xl font-bold text-sm hover:bg-navy/90 transition-all shadow-md enabled:hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 mt-4"
+                >
+                    {isSubmitting ? (
+                        <>
+                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            Processing...
+                        </>
+                    ) : (
+                        'Confirm Booking'
+                    )}
+                </button>
+            </form>
+        </div>
+    );
+};
+
 const AiPlanner = () => {
     const [messages, setMessages] = useState([
         {
@@ -146,6 +359,12 @@ const AiPlanner = () => {
                                     streaming: false,
                                 }));
 
+                            } else if (event === 'booking_form') {
+                                updateLastBotMsg((msg) => ({
+                                    ...msg,
+                                    bookingForm: payload,
+                                }));
+
                             } else if (event === 'done') {
                                 setIsSearchingHalls(false);
                                 // awaitingReply = true means booking_prompt just interrupted
@@ -252,6 +471,9 @@ const AiPlanner = () => {
                                             {msg.text}
                                             {msg.streaming && (
                                                 <span className="inline-block w-[2px] h-[1em] bg-gold ml-0.5 align-middle animate-pulse" />
+                                            )}
+                                            {msg.bookingForm && (
+                                                <InlineBookingForm bookingForm={msg.bookingForm} />
                                             )}
                                         </div>
                                         <span className="text-[10px] text-gray-400 mt-1.5 px-1 font-medium">

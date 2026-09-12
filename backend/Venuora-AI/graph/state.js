@@ -149,6 +149,12 @@ export const VenuoraStateAnnotation = Annotation.Root({
     reducer: (prev, next) => next ?? prev,
     default: () => null,
   }),
+
+  /** Signal to the frontend to display the booking form. */
+  bookingFormOutput: Annotation({
+    reducer: (prev, next) => next ?? prev,
+    default: () => null,
+  }),
 });
 
 /** @typedef {typeof VenuoraStateAnnotation.State} VenuoraState */

@@ -16,6 +16,16 @@ const bookingSchema = mongoose.Schema({
     type: Date,
     required: [true, 'Please add an event date'],
   },
+  eventType: {
+    type: String,
+    default: 'Wedding',
+  },
+  phone: {
+    type: String,
+  },
+  cnic: {
+    type: String,
+  },
   guestsCount: {
     type: Number,
     required: [true, 'Please add guests count'],
