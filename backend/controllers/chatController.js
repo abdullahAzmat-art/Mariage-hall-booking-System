@@ -1,4 +1,4 @@
-﻿const Message = require('../models/messageModel');
+const Message = require('../models/messageModel');
 const User = require('../models/userModel');
 
 const chatWithAI = async (req, res) => {
@@ -77,7 +77,29 @@ const chatStreamWithAI = async (req, res) => {
 
       // Interrupt fired (graph paused, waiting for user reply)
       if (chunk.__interrupt__) {
-        const interruptMsg = chunk.__interrupt__[0]?.value ?? "Would you like to proceed?";
+        const interruptValue = chunk.__interrupt__[0]?.value;
+
+        // ── Case 1: booking_requirements interrupt — send the form to frontend ──
+        if (interruptValue && typeof interruptValue === 'object' && interruptValue.type === 'booking_form') {
+          // First stream any halls we collected
+          if (hallsPayload) {
+            send('halls', hallsPayload);
+            if (finalAnswer) await safeStreamText(finalAnswer);
+          }
+          // If the bookingPromptNode set an answer ("Preparing booking form..."), stream it
+          if (finalAnswer) await safeStreamText(finalAnswer);
+
+          // Send the booking form as a special event — frontend renders the UI form
+          send('booking_form', interruptValue);
+          send('done', { threadId: activeThreadId, awaitingReply: true });
+          if (!res.writableEnded) res.end();
+          return;
+        }
+
+        // ── Case 2: regular text interrupt (booking_prompt yes/no question) ──
+        const interruptMsg = typeof interruptValue === 'string'
+          ? interruptValue
+          : (interruptValue?.message ?? "Would you like to proceed?");
 
         if (hallsPayload) {
           send('halls', hallsPayload);

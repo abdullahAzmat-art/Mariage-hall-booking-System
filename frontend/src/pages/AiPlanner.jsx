@@ -60,7 +60,7 @@ const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
                 .map(item => ({ itemName: item.name, price: item.price, quantity: Number(guestsCount) }));
 
             const formData = {
-                customerId:    JSON.parse(localStorage.getItem('user'))?._id || '',
+                customerId:    JSON.parse(sessionStorage.getItem('user'))?._id || '',
                 eventDate,
                 eventType,
                 phone,
@@ -118,16 +118,6 @@ const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
             setIsSubmitting(false);
         }
     };
-
-    if (isSuccess) {
-        return (
-            <div className="mt-4 p-5 bg-green-50 rounded-2xl border border-green-100 shadow-sm w-full min-w-[280px] text-center">
-                <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl">✓</div>
-                <h4 className="font-bold text-green-800 mb-1">Booking Confirmed!</h4>
-                <p className="text-sm text-green-700">Your reservation for {bookingForm.hallName} has been submitted.</p>
-            </div>
-        );
-    }
 
     return (
         <div className="mt-4 p-5 bg-white rounded-2xl border border-gray-100 shadow-md w-full min-w-[280px] font-body">
@@ -468,12 +458,31 @@ const AiPlanner = () => {
                                                     : 'bg-gray-50 text-navy border border-gray-100 rounded-2xl rounded-bl-sm'
                                             }`}
                                         >
-                                            {msg.text}
+                                            {msg.text && msg.text.split(/\*\*(.*?)\*\*/g).map((part, index) => 
+                                                index % 2 === 1 ? <strong key={index}>{part}</strong> : <span key={index}>{part}</span>
+                                            )}
                                             {msg.streaming && (
                                                 <span className="inline-block w-[2px] h-[1em] bg-gold ml-0.5 align-middle animate-pulse" />
                                             )}
                                             {msg.bookingForm && (
-                                                <InlineBookingForm bookingForm={msg.bookingForm} />
+                                                <InlineBookingForm
+                                                    bookingForm={msg.bookingForm}
+                                                    threadId={threadId}
+                                                    onBookingConfirmed={(confirmText) => {
+                                                        // Replace the form message with a success message in the chat
+                                                        setMessages(prev => prev.map((m, i) =>
+                                                            i === prev.indexOf(msg)
+                                                                ? { ...m, bookingForm: null, text: confirmText }
+                                                                : m
+                                                        ));
+                                                        // Also add a new bot message with the confirmation
+                                                        setMessages(prev => [...prev, {
+                                                            sender: 'bot',
+                                                            text: confirmText,
+                                                            time: formatTime(),
+                                                        }]);
+                                                    }}
+                                                />
                                             )}
                                         </div>
                                         <span className="text-[10px] text-gray-400 mt-1.5 px-1 font-medium">
