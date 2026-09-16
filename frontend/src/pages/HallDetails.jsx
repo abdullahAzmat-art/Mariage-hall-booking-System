@@ -33,12 +33,18 @@ const HallDetails = () => {
         });
     };
 
+    const [hallBookings, setHallBookings] = useState([]);
+
     useEffect(() => {
         window.scrollTo(0, 0);
         const fetchData = async () => {
             try {
                 const hallData = await hallService.getHallById(id);
                 setHall(hallData);
+                
+                // Fetch bookings for this hall
+                const bookingsData = await bookingService.getHallBookings(id);
+                setHallBookings(bookingsData);
             } catch (error) {
                 console.error("Failed to fetch data", error);
                 // Optional: Set an error state to display to the user
@@ -179,13 +185,48 @@ const HallDetails = () => {
 
                                     <form className="space-y-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Event Date</label>
-                                            <input
-                                                type="date"
-                                                value={bookingData.eventDate}
-                                                onChange={(e) => setBookingData({ ...bookingData, eventDate: e.target.value })}
-                                                className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-primary"
-                                            />
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Event Date</label>
+                                            <div className="rounded-lg border border-gray-200 overflow-hidden">
+                                                <Calendar
+                                                    value={bookingData.eventDate ? new Date(bookingData.eventDate) : null}
+                                                    onChange={(date) => {
+                                                        const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+                                                        setBookingData({ ...bookingData, eventDate: localDate });
+                                                    }}
+                                                    tileClassName={({ date, view }) => {
+                                                        if (view === 'month') {
+                                                            const dateString = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+                                                            const isInBookedDates = (hall.bookedDates || []).some(d =>
+                                                                new Date(d).toISOString().split('T')[0] === dateString
+                                                            );
+                                                            const isInBookings = hallBookings.some(b => {
+                                                                const bDate = new Date(b.eventDate).toISOString().split('T')[0];
+                                                                return bDate === dateString && b.timeSlot === bookingData.functionTime;
+                                                            });
+                                                            return (isInBookedDates || isInBookings) ? 'booked-tile' : 'available-tile';
+                                                        }
+                                                    }}
+                                                    tileDisabled={({ date, view }) => {
+                                                        if (view === 'month') {
+                                                            const dateString = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+                                                            const isInBookedDates = (hall.bookedDates || []).some(d =>
+                                                                new Date(d).toISOString().split('T')[0] === dateString
+                                                            );
+                                                            const isInBookings = hallBookings.some(b => {
+                                                                const bDate = new Date(b.eventDate).toISOString().split('T')[0];
+                                                                return bDate === dateString && b.timeSlot === bookingData.functionTime;
+                                                            });
+                                                            return isInBookedDates || isInBookings;
+                                                        }
+                                                    }}
+                                                    className="w-full border-none"
+                                                />
+                                            </div>
+                                            {bookingData.eventDate && (
+                                                <p className="text-sm text-primary font-medium mt-2">
+                                                    ✅ Selected: {new Date(bookingData.eventDate).toLocaleDateString('en-PK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                                </p>
+                                            )}
                                         </div>
 
                                         <div>
@@ -264,9 +305,15 @@ const HallDetails = () => {
                                                         return;
                                                     }
 
-                                                    // Check if date is booked by manager
-                                                    if (hall.bookedDates && hall.bookedDates.includes(bookingData.eventDate)) {
-                                                        toast.error("This date is unavailable. Please select another date.");
+                                                    // Check if date and time slot is booked
+                                                    const formattedDate = new Date(bookingData.eventDate).toISOString().split('T')[0];
+                                                    const isBooked = hallBookings.some(b => {
+                                                        const bDate = new Date(b.eventDate).toISOString().split('T')[0];
+                                                        return bDate === formattedDate && b.timeSlot === bookingData.functionTime;
+                                                    });
+
+                                                    if (isBooked) {
+                                                        toast.error("This date and time slot is unavailable. Please select another.");
                                                         return;
                                                     }
 
@@ -309,15 +356,40 @@ const HallDetails = () => {
                                 <Calendar
                                     tileClassName={({ date, view }) => {
                                         if (view === 'month') {
-                                            const dateString = date.toISOString().split('T')[0];
-                                            const isBooked = hall.bookedDates && hall.bookedDates.includes(dateString);
-                                            return isBooked ? 'bg-red-100 text-red-600 rounded-full font-bold' : 'text-green-600 font-bold';
+                                            const dateString = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+
+                                            // Check hall.bookedDates array (direct from hall model)
+                                            const isInBookedDates = (hall.bookedDates || []).some(d => {
+                                                return new Date(d).toISOString().split('T')[0] === dateString;
+                                            });
+
+                                            // Check hallBookings (from booking records) matching the selected time slot
+                                            const isInBookings = hallBookings.some(b => {
+                                                const bDate = new Date(b.eventDate).toISOString().split('T')[0];
+                                                return bDate === dateString && b.timeSlot === bookingData.functionTime;
+                                            });
+
+                                            const isBooked = isInBookedDates || isInBookings;
+
+                                            return isBooked
+                                                ? 'booked-tile'
+                                                : 'available-tile';
                                         }
                                     }}
                                     tileDisabled={({ date, view }) => {
                                         if (view === 'month') {
-                                            const dateString = date.toISOString().split('T')[0];
-                                            return hall.bookedDates && hall.bookedDates.includes(dateString);
+                                            const dateString = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+
+                                            const isInBookedDates = (hall.bookedDates || []).some(d => {
+                                                return new Date(d).toISOString().split('T')[0] === dateString;
+                                            });
+
+                                            const isInBookings = hallBookings.some(b => {
+                                                const bDate = new Date(b.eventDate).toISOString().split('T')[0];
+                                                return bDate === dateString && b.timeSlot === bookingData.functionTime;
+                                            });
+
+                                            return isInBookedDates || isInBookings;
                                         }
                                     }}
                                 />

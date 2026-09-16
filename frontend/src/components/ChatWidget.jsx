@@ -17,13 +17,7 @@ const ChatWidget = () => {
             {isOpen && <ChatWindow onClose={() => setIsOpen(false)} />}
 
             {!isOpen && !hasInteracted && (
-                <div className="fixed bottom-24 right-6 z-40 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] px-5 py-4 max-w-[240px] animate-bubble-in border border-gray-100 hidden sm:block">
-                    <p className="text-sm text-navy font-medium leading-snug">
-                        👋 Need help booking? <br/>
-                        <span className="font-bold text-terracotta">Chat with Vera!</span>
-                    </p>
-                    <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white border-r border-b border-gray-100 rotate-45"></div>
-                </div>
+             <div></div>
             )}
 
             <button

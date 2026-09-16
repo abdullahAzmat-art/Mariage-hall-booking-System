@@ -11,6 +11,11 @@ const bookingService = {
         return response.data;
     },
 
+    getHallBookings: async (hallId) => {
+        const response = await api.get(`/bookings/hall/${hallId}`);
+        return response.data;
+    },
+
     getAllBookings: async () => {
         const response = await api.get('/bookings');
         return response.data;

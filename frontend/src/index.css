@@ -136,3 +136,31 @@
 .animate-typing {
     animation: typing 1.2s infinite ease-in-out;
 }
+
+/* ── react-calendar availability tiles ── */
+.booked-tile abbr,
+.booked-tile {
+    background-color: #ef4444 !important;
+    color: #ffffff !important;
+    border-radius: 50% !important;
+    font-weight: 700 !important;
+    cursor: not-allowed !important;
+}
+
+.available-tile abbr,
+.available-tile {
+    color: #16a34a !important;
+    font-weight: 700 !important;
+}
+
+/* Remove react-calendar disabled opacity on booked tiles so the red shows clearly */
+.react-calendar__tile:disabled.booked-tile {
+    opacity: 1 !important;
+}
+
+/* Make inline booking-form calendar stretch full width */
+.react-calendar {
+    width: 100% !important;
+    border: none !important;
+    font-family: inherit !important;
+}

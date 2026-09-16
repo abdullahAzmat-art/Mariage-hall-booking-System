@@ -5,34 +5,29 @@ const Hall = require('../models/hallModel');
 // @route   POST /api/bookings
 // @access  Private/Customer
 const createBooking = async (req, res) => {
-  const { hallId, eventDate, guestsCount, totalAmount, customFood } = req.body;
+  const { hallId, eventDate, timeSlot, guestsCount, totalAmount, customFood } = req.body;
 
-  if (!hallId || !eventDate || !guestsCount || !totalAmount) {
+  if (!hallId || !eventDate || !timeSlot || !guestsCount || !totalAmount) {
     return res.status(400).json({ message: 'Please add all fields' });
   }
 
   try {
-    // Check for double booking
+    // Check for double booking with same date and time slot
     const existingBooking = await Booking.findOne({
       hallId,
       eventDate: new Date(eventDate),
+      timeSlot,
       status: { $nin: ['rejected', 'payment_rejected'] },
     });
 
     if (existingBooking) {
-      return res.status(400).json({ message: 'Hall is already booked for this date' });
+      return res.status(400).json({ message: 'Hall is already booked for this date and time slot' });
     }
 
-    // Check if hall exists and date is available
+    // Check if hall exists
     const hall = await Hall.findById(hallId);
     if (!hall) {
       return res.status(404).json({ message: 'Hall not found' });
-    }
-
-    // Check if date is blocked by manager
-    const dateString = new Date(eventDate).toISOString().split('T')[0];
-    if (hall.bookedDates && hall.bookedDates.includes(dateString)) {
-      return res.status(400).json({ message: 'This date is unavailable (booked by manager)' });
     }
 
     // Check capacity
@@ -128,6 +123,21 @@ const getMyBookings = async (req, res) => {
   }
 };
 
+// @desc    Get hall bookings
+// @route   GET /api/bookings/hall/:hallId
+// @access  Public
+const getHallBookings = async (req, res) => {
+  try {
+    const { hallId } = req.params;
+    const bookings = await Booking.find({ 
+        hallId, 
+        status: { $nin: ['rejected', 'payment_rejected'] } 
+    }).select('eventDate timeSlot status');
+    res.status(200).json(bookings);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 // @desc    Get manager bookings
 // @route   GET /api/bookings/manager
 // @access  Private/Manager
@@ -464,4 +474,5 @@ module.exports = {
   addCustomFood,
   updateCustomFoodStatus,
   getManagerBookings,
+  getHallBookings,
 };

@@ -20,6 +20,10 @@ const bookingSchema = mongoose.Schema({
     type: String,
     default: 'Wedding',
   },
+  timeSlot: {
+    type: String,
+    default: 'Morning',
+  },
   phone: {
     type: String,
   },

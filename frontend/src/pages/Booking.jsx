@@ -35,6 +35,7 @@ const Booking = () => {
         phone: '',
         cnic: '',
         eventDate: location.state?.initialData?.eventDate || '',
+        timeSlot: location.state?.initialData?.functionTime || 'Morning',
         eventType: location.state?.initialData?.eventType || 'Wedding',
         guestCount: location.state?.initialData?.guestCount || '',
         packageId: '',
@@ -132,6 +133,7 @@ const Booking = () => {
             const bookingPayload = {
                 hallId: hall._id,
                 eventDate: formData.eventDate,
+                timeSlot: formData.timeSlot,
                 guestsCount: formData.guestCount,
                 totalAmount: totalPrice,
                 customFood: customFood
@@ -244,6 +246,14 @@ const Booking = () => {
                                                 <option>Reception</option>
                                                 <option>Birthday</option>
                                                 <option>Corporate</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Time Slot</label>
+                                            <select name="timeSlot" value={formData.timeSlot} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:border-primary">
+                                                <option>Morning</option>
+                                                <option>Afternoon</option>
+                                                <option>Evening</option>
                                             </select>
                                         </div>
                                         <div>

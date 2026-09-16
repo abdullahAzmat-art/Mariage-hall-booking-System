@@ -12,6 +12,7 @@ const {
   addCustomFood,
   updateCustomFoodStatus,
   getManagerBookings,
+  getHallBookings,
 } = require('../controllers/bookingController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
@@ -20,6 +21,8 @@ router
   .route('/')
   .post(protect, authorize('customer'), createBooking)
   .get(protect, authorize('admin', 'manager'), getBookings);
+
+router.get('/hall/:hallId', getHallBookings);
 
 router.get('/manager', protect, authorize('manager'), getManagerBookings);
 

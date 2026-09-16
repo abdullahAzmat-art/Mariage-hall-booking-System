@@ -46,7 +46,14 @@ function AppRoutes() {
         <Route path="/halls" element={<Halls />} />
         <Route path="/halls/:id" element={<HallDetails />} />
         <Route path="/packages" element={<Packages />} />
-        <Route path="/ai-planner" element={<AiPlanner />} />
+        <Route
+          path="/ai-planner"
+          element={
+            <ProtectedRoute>
+              <AiPlanner />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route
