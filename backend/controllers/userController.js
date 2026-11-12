@@ -7,22 +7,33 @@ const Hall = require('../models/hallModel');
 // @access  Private/Admin
 const getUsers = async (req, res) => {
   try {
-    const users = await User.find({});
+    const users = await User.find({}).select(
+      'name email phone role managerApplication paymentWarnings accountSuspended createdAt'
+    );
     res.json(users);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
+const ALLOWED_ROLES = ['admin', 'manager', 'customer'];
+const ALLOWED_APPLICATION_STATUSES = ['approved', 'rejected'];
+
 // @desc    Update user role
 // @route   PUT /api/users/role/:id
 // @access  Private/Admin
 const updateUserRole = async (req, res) => {
   try {
+    const { role } = req.body;
+
+    if (!ALLOWED_ROLES.includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (user) {
-      user.role = req.body.role || user.role;
+      user.role = role;
       const updatedUser = await user.save();
 
       res.json({
@@ -51,7 +62,7 @@ const findUserThroughHall = async (req, res) => {
     if (!hallget) {
       return res.status(404).json({ message: 'Hall not found' });
     }
-    const user = await User.findById(hallget.manager);
+    const user = await User.findById(hallget.manager).select('_id name role');
     if (user) {
       res.json(user);
     } else {
@@ -79,7 +90,14 @@ const applyForManager = async (req, res) => {
         appliedAt: Date.now(),
       };
       const updatedUser = await user.save();
-      res.json(updatedUser);
+      res.json({
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        phone: updatedUser.phone,
+        role: updatedUser.role,
+        managerApplication: updatedUser.managerApplication,
+      });
     } else {
       res.status(404).json({ message: 'User not found' });
     }
@@ -93,7 +111,9 @@ const applyForManager = async (req, res) => {
 // @access  Private/Admin
 const getManagerApplications = async (req, res) => {
   try {
-    const users = await User.find({ 'managerApplication.status': 'pending' });
+    const users = await User.find({ 'managerApplication.status': 'pending' }).select(
+      'name email phone role managerApplication'
+    );
     res.json(users);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -106,6 +126,11 @@ const getManagerApplications = async (req, res) => {
 const updateManagerApplicationStatus = async (req, res) => {
   try {
     const { status } = req.body;
+
+    if (!ALLOWED_APPLICATION_STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Invalid application status' });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (user) {
@@ -114,7 +139,13 @@ const updateManagerApplicationStatus = async (req, res) => {
         user.role = 'manager';
       }
       const updatedUser = await user.save();
-      res.json(updatedUser);
+      res.json({
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        managerApplication: updatedUser.managerApplication,
+      });
     } else {
       res.status(404).json({ message: 'User not found' });
     }
@@ -128,7 +159,7 @@ const updateManagerApplicationStatus = async (req, res) => {
 // @access  Public (or Protected)
 const getUserById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    const user = await User.findById(req.params.id).select('_id name role');
     if (user) {
       res.json(user);
     } else {

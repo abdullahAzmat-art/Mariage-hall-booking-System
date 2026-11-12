@@ -229,7 +229,7 @@ const ManagerDashboard = () => {
 
     const handleSaveAvailability = async () => {
         try {
-            await hallService.updateHall(selectedHallForAvailability._id, { bookedDates: availabilityDates });
+            await hallService.updateHallAvailability(selectedHallForAvailability._id, availabilityDates);
             toast.success('Availability updated successfully');
             setShowAvailabilityModal(false);
             fetchHalls();

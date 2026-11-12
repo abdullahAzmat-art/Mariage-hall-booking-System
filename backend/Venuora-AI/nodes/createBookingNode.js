@@ -11,15 +11,22 @@ export async function createBookingNode(state) {
 console.log(data , "data in createBookingNode");
 console.log(data.hallId , "halls id ")
 console.log(data.customerid , "halls id ")
-  if (!data || !data.hallId || !data.customerId) {
+  if (!data || !data.hallId || !state.userId) {
     return {
       answer: "Booking failed. Missing required information. Please try again.",
     };
   }
 
   try {
+    // Identity comes from the authenticated API request, never from form data.
+    const bookingData = {
+      ...data,
+      customerId: state.userId,
+      hallId: state.selectedHall?._id || data.hallId,
+    };
+
     // Save the booking to MongoDB
-    const newBooking = await Booking.create(data);
+    const newBooking = await Booking.create(bookingData);
 
     console.log("\n✅ [CREATE_BOOKING] Booking saved to DB:", newBooking._id);
 

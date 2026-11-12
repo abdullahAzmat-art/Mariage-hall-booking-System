@@ -51,7 +51,7 @@ export function bookingRequirementsNode(state) {
     answer: `Your booking for **${hall?.name}** is being confirmed...`,
     booking: {
       hallId:           hall?._id,
-      customerId:       bookingData.customerId,
+      customerId:       state.userId,
       eventDate:        bookingData.eventDate,
       eventType:        bookingData.eventType  || "Wedding",
       phone:            bookingData.phone,

@@ -2,6 +2,8 @@ const express = require('express');
 const path = require('path');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const { Server } = require('socket.io');
 const userModel = require('./models/userModel');
@@ -34,49 +36,73 @@ const io = new Server(server, {
     cors: { origin: '*' }
 });
 
+const MAX_SOCKET_MESSAGE_LENGTH = 2000;
+
+// Reject socket connections that do not present a valid JWT.
+io.use((socket, next) => {
+    const authHeader = socket.handshake.headers.authorization;
+    const headerToken = authHeader && authHeader.startsWith('Bearer ')
+        ? authHeader.split(' ')[1]
+        : null;
+    const token = socket.handshake.auth?.token || headerToken;
+
+    if (!token) {
+        return next(new Error('Not authorized'));
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        socket.userId = decoded.id;
+        return next();
+    } catch (error) {
+        return next(new Error('Not authorized'));
+    }
+});
+
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    // ✅ User joins their own room
-    socket.on('join', (userId) => {
-        socket.join(userId);
-        console.log(`User ${userId} joined room`);
-    });
+    // ✅ Users always join a room derived from their JWT identity
+    socket.join(socket.userId);
 
     // ✅ Handle chat message
     socket.on('send-message', async (data) => {
-        const { fromUserId, toUserId, message } = data;
+        try {
+            const { toUserId, message } = data || {};
+            const fromUserId = socket.userId;
 
-        const findUser = await userModel.findById(toUserId);
+            if (typeof message !== 'string') return;
+            const text = message.trim();
+            if (!text || text.length > MAX_SOCKET_MESSAGE_LENGTH) return;
+            if (!mongoose.isValidObjectId(toUserId) || toUserId === fromUserId) return;
 
-        if (!findUser) return;
+            const findUser = await userModel.findById(toUserId).select('_id');
 
-        // ✅ Save message to database
-        const newMessage = await messageModel.create({
-            fromUserId,
-            toUserId,
-            message,
-            timestamp: new Date()
-        });
+            if (!findUser) return;
 
-        const messageData = {
-            fromUserId,
-            toUserId,
-            message,
-            timestamp: newMessage.timestamp
-        };
+            // ✅ Save message to database
+            const newMessage = await messageModel.create({
+                fromUserId,
+                toUserId,
+                message: text,
+                timestamp: new Date()
+            });
 
-        console.log('✅ Message saved to database');
-        console.log('✅ Message saved to database');
-        // console.log(data)
-        console.log(messageData);
+            const messageData = {
+                fromUserId,
+                toUserId,
+                message: text,
+                timestamp: newMessage.timestamp
+            };
 
-        // console.log(findUser)   
-        // ✅ Send to receiver
-        io.to(toUserId).emit('receive-message', messageData);
+            // ✅ Send to receiver
+            io.to(toUserId).emit('receive-message', messageData);
 
-        // ✅ Send back to sender
-        io.to(fromUserId).emit('receive-message', messageData);
+            // ✅ Send back to sender
+            io.to(fromUserId).emit('receive-message', messageData);
+        } catch (error) {
+            console.error('Socket message error:', error.message);
+        }
     });
 
     // ✅ Correct disconnect event

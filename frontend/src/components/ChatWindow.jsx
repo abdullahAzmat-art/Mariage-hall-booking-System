@@ -8,6 +8,8 @@ const SUGGESTIONS = [
     'Cancellation policy?',
 ];
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 const formatTime = (date = new Date()) =>
     date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -41,6 +43,16 @@ const ChatWindow = ({ onClose }) => {
         const trimmed = text.trim();
         if (!trimmed) return;
 
+        const token = sessionStorage.getItem('token');
+        if (!token) {
+            setInput('');
+            setMessages((prev) => [
+                ...prev,
+                { sender: 'bot', text: 'Please log in to chat with Vera.', time: formatTime() },
+            ]);
+            return;
+        }
+
         const userMessage = { sender: 'user', text: trimmed, time: formatTime() };
         setMessages((prev) => [...prev, userMessage]);
         setInput('');
@@ -49,8 +61,9 @@ const ChatWindow = ({ onClose }) => {
 
         try {
             const res = await axios.post(
-                'https://mariage-hall-booking-system.vercel.app/api/chat',
-                { message: trimmed }
+                `${API_BASE}/chat`,
+                { message: trimmed },
+                { headers: { Authorization: `Bearer ${token}` } }
             );
             const replyText = res.data.reply || "I'm here to help with your booking!";
             setTimeout(() => {
@@ -63,12 +76,15 @@ const ChatWindow = ({ onClose }) => {
             }, 600);
         } catch (error) {
             console.error('Chat Error:', error);
+            const message = error.response?.status === 401
+                ? 'Your session has expired. Please log in again to chat.'
+                : "Sorry, I'm having trouble connecting right now. Please try again in a moment.";
             setIsTyping(false);
             setMessages((prev) => [
                 ...prev,
                 {
                     sender: 'bot',
-                    text: "Sorry, I'm having trouble connecting right now. Please try again in a moment.",
+                    text: message,
                     time: formatTime(),
                 },
             ]);

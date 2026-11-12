@@ -37,6 +37,11 @@ const hallService = {
         return response.data;
     },
 
+    updateHallAvailability: async (id, bookedDates) => {
+        const response = await api.put(`/halls/${id}/availability`, { bookedDates });
+        return response.data;
+    },
+
     deleteHall: async (id) => {
         const response = await api.delete(`/halls/${id}`);
         return response.data;

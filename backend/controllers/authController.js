@@ -13,7 +13,7 @@ const generateToken = (id) => {
 // @route   POST /api/auth/register
 // @access  Public
 const registerUser = async (req, res) => {
-  const { name, email, password, phone, role } = req.body;
+  const { name, email, password, phone } = req.body;
 
   if (!name || !email || !password || !phone) {
     return res.status(400).json({ message: 'Please add all fields' });
@@ -30,13 +30,13 @@ const registerUser = async (req, res) => {
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
-  // Create user
+  // Public registration always creates a customer; roles are never accepted from the client.
   const user = await User.create({
     name,
     email,
     password: hashedPassword,
     phone,
-    role: role || 'customer',
+    role: 'customer',
   });
 
   if (user) {
@@ -59,8 +59,8 @@ const loginUser = async (req, res) => {
   const { email, password } = req.body;
   console.log('Login attempt:', email);
 
-  // Check for user email
-  const user = await User.findOne({ email });
+  // Password is excluded by default, so request it explicitly for comparison only.
+  const user = await User.findOne({ email }).select('+password');
   console.log('User found:', user ? 'Yes' : 'No');
 
   if (user && (await bcrypt.compare(password, user.password))) {

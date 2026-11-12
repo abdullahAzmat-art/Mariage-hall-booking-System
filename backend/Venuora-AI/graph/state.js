@@ -36,6 +36,16 @@ export const VenuoraStateAnnotation = Annotation.Root({
   }),
 
   /**
+   * Authenticated user id supplied by the API layer (from the JWT).
+   * Booking nodes must use this instead of any client-supplied id.
+   * @type {string|null}
+   */
+  userId: Annotation({
+    reducer: (prev, next) => next ?? prev,
+    default: () => null,
+  }),
+
+  /**
    * Classified intent detected by the EVALUATOR node.
    * Values: "rag" | "calculation" | "check_halls"
    * @type {string|null}

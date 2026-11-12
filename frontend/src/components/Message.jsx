@@ -1,14 +1,26 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FiSend, FiMoreVertical } from 'react-icons/fi';
 import { io } from "socket.io-client";
 
-const socket = io("https://mariage-hall-booking-system.vercel.app", {
-  transports: ["websocket"],
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_ORIGIN = API_BASE.replace(/\/api\/?$/, '');
+const authHeaders = () => ({
+  Authorization: `Bearer ${sessionStorage.getItem('token')}`,
 });
 
 
 
 const Message = () => {
+  const socket = useMemo(
+    () => io(API_ORIGIN, {
+      transports: ["websocket"],
+      auth: { token: sessionStorage.getItem('token') },
+    }),
+    []
+  );
+
+  useEffect(() => () => socket.disconnect(), [socket]);
+
   const [chats, setChats] = useState(() => {
     const savedManagerId = sessionStorage.getItem("chatWith");
     if (savedManagerId) {
@@ -70,7 +82,6 @@ const Message = () => {
     ));
 
     socket.emit("send-message", {
-      fromUserId: user,
       toUserId: targetId,
       message: messageInput
     });
@@ -115,7 +126,7 @@ const Message = () => {
   // Fetch user details helper
   const fetchUserDetails = async (userId) => {
     try {
-      const response = await fetch(`https://mariage-hall-booking-system.vercel.app/api/user/${userId}`);
+      const response = await fetch(`${API_BASE}/user/${userId}`);
       if (response.ok) {
         return await response.json();
       }
@@ -144,7 +155,9 @@ const Message = () => {
 
     const fetchConversations = async () => {
       try {
-        const response = await fetch(`https://mariage-hall-booking-system.vercel.app/api/chat/conversations/${user}`);
+        const response = await fetch(`${API_BASE}/chat/conversations`, {
+          headers: authHeaders(),
+        });
         if (response.ok) {
           const data = await response.json();
           setChats(prev => {
@@ -167,7 +180,9 @@ const Message = () => {
 
     const fetchChatHistory = async () => {
       try {
-        const response = await fetch(`https://mariage-hall-booking-system.vercel.app/api/chat/messages/${user}/${activeChat}`);
+        const response = await fetch(`${API_BASE}/chat/messages/${activeChat}`, {
+          headers: authHeaders(),
+        });
         if (response.ok) {
           const dbMessages = await response.json();
           const mappedMessages = dbMessages.map(msg => ({
@@ -192,9 +207,6 @@ const Message = () => {
 
   useEffect(() => {
     if (!user) return;
-
-    console.log("Joining room:", user);
-    socket.emit("join", user);
 
     const handleReceiveMessage = async (data) => {
       console.log("Received:", data);
@@ -249,7 +261,7 @@ const Message = () => {
 
     socket.on("receive-message", handleReceiveMessage);
     return () => socket.off("receive-message", handleReceiveMessage);
-  }, [user, activeChat]);
+  }, [user, activeChat, socket]);
 
   // Derived state for current chat view
   const currentChat = chats.find(c => c.id === activeChat);

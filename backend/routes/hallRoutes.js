@@ -6,6 +6,7 @@ const {
   getHall,
   createHall,
   updateHall,
+  updateHallAvailability,
   deleteHall,
 } = require('../controllers/hallController');
 const { protect, authorize } = require('../middleware/authMiddleware');
@@ -13,6 +14,7 @@ const upload = require('../middleware/uploadMiddleware');
 
 router.route('/').get(getHalls).post(protect, authorize('admin', 'manager'), upload.single('image'), createHall);
 router.get('/manager', protect, authorize('manager'), getManagerHalls);
+router.put('/:id/availability', protect, authorize('admin', 'manager'), updateHallAvailability);
 router
   .route('/:id')
   .get(getHall)

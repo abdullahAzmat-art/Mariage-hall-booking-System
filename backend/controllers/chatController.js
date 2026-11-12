@@ -1,11 +1,28 @@
+const crypto = require('crypto');
+const mongoose = require('mongoose');
 const Message = require('../models/messageModel');
 const User = require('../models/userModel');
+
+const MAX_MESSAGE_LENGTH = 4000;
+const MAX_THREAD_ID_LENGTH = 200;
+
+const isValidMessage = (message) =>
+  typeof message === 'string' &&
+  message.trim().length > 0 &&
+  message.length <= MAX_MESSAGE_LENGTH;
 
 const chatWithAI = async (req, res) => {
   try {
     const { message } = req.body;
+
+    if (!isValidMessage(message)) {
+      return res.status(400).json({
+        message: `Message must be between 1 and ${MAX_MESSAGE_LENGTH} characters`,
+      });
+    }
+
     const { venuoraGraph } = await import('../Venuora-AI/graph/venuoraGraph.js');
-    const initialState = { question: message };
+    const initialState = { question: message, userId: req.user.id };
     const finalState = await venuoraGraph.invoke(initialState);
     res.json({ reply: finalState.answer });
   } catch (error) {
@@ -16,6 +33,24 @@ const chatWithAI = async (req, res) => {
 
 // Streaming SSE endpoint
 const chatStreamWithAI = async (req, res) => {
+  const { message, threadId } = req.body;
+
+  if (!isValidMessage(message)) {
+    return res.status(400).json({
+      message: `Message must be between 1 and ${MAX_MESSAGE_LENGTH} characters`,
+    });
+  }
+
+  // Namespace checkpointer threads by authenticated user so one user cannot
+  // resume or inspect another user's AI conversation.
+  const threadPrefix = `${req.user.id}:`;
+  const activeThreadId =
+    typeof threadId === 'string' &&
+    threadId.startsWith(threadPrefix) &&
+    threadId.length <= MAX_THREAD_ID_LENGTH
+      ? threadId
+      : `${threadPrefix}${crypto.randomUUID()}`;
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -48,11 +83,9 @@ const chatStreamWithAI = async (req, res) => {
   });
 
   try {
-    const { message, threadId } = req.body;
     const { venuoraGraph } = await import('../Venuora-AI/graph/venuoraGraph.js');
     const { Command } = await import('@langchain/langgraph');
 
-    const activeThreadId = threadId || crypto.randomUUID();
     const config = { configurable: { thread_id: activeThreadId } };
 
     send('thread', { threadId: activeThreadId });
@@ -62,7 +95,7 @@ const chatStreamWithAI = async (req, res) => {
 
     const streamInput = isInterrupted
       ? new Command({ resume: message })
-      : { question: message };
+      : { question: message, userId: req.user.id };
 
     const stream = await venuoraGraph.stream(streamInput, {
       ...config,
@@ -152,11 +185,17 @@ const chatStreamWithAI = async (req, res) => {
 
 const getMessages = async (req, res) => {
   try {
-    const { fromUserId, toUserId } = req.params;
+    const { otherUserId } = req.params;
+
+    if (!mongoose.isValidObjectId(otherUserId)) {
+      return res.status(400).json({ message: 'Invalid user id' });
+    }
+
+    const selfId = req.user.id;
     const messages = await Message.find({
       $or: [
-        { fromUserId, toUserId },
-        { fromUserId: toUserId, toUserId: fromUserId }
+        { fromUserId: selfId, toUserId: otherUserId },
+        { fromUserId: otherUserId, toUserId: selfId }
       ]
     }).sort({ timestamp: 1 });
     res.json(messages);
@@ -168,16 +207,16 @@ const getMessages = async (req, res) => {
 
 const getConversations = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const selfId = req.user.id;
 
     const messages = await Message.find({
-      $or: [{ fromUserId: userId }, { toUserId: userId }]
+      $or: [{ fromUserId: selfId }, { toUserId: selfId }]
     }).sort({ timestamp: -1 });
 
     const conversationsMap = new Map();
 
     for (const msg of messages) {
-      const partnerId = msg.fromUserId.toString() === userId ? msg.toUserId.toString() : msg.fromUserId.toString();
+      const partnerId = msg.fromUserId.toString() === selfId ? msg.toUserId.toString() : msg.fromUserId.toString();
       if (!conversationsMap.has(partnerId)) {
         conversationsMap.set(partnerId, {
           lastMessage: msg.message,

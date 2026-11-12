@@ -60,7 +60,6 @@ const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
                 .map(item => ({ itemName: item.name, price: item.price, quantity: Number(guestsCount) }));
 
             const formData = {
-                customerId:    JSON.parse(sessionStorage.getItem('user'))?._id || '',
                 eventDate,
                 eventType,
                 phone,
@@ -73,10 +72,14 @@ const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
             // ✅ Instead of calling bookingService directly, we RESUME the LangGraph
             // with the form data as a JSON string. The graph will then:
             //   bookingRequirementsNode (receives data) → createBookingNode (saves to DB)
+            // Customer identity is derived from the JWT on the server.
             const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
             const response = await fetch(`${API_BASE}/chat/stream`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${sessionStorage.getItem('token')}`,
+                },
                 // Send the form data as the "message" so the graph resumes with it
                 body: JSON.stringify({ message: JSON.stringify(formData), threadId }),
             });
@@ -291,7 +294,10 @@ const AiPlanner = () => {
 
             const response = await fetch(`${API_BASE}/chat/stream`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${sessionStorage.getItem('token')}`,
+                },
                 // Always pass threadId so backend can resume interrupted state
                 body: JSON.stringify({ message: trimmed, threadId }),
             });

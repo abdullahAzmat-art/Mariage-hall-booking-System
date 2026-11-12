@@ -1,6 +1,15 @@
 const Booking = require('../models/bookingModel');
 const Hall = require('../models/hallModel');
 
+const BOOKING_STATUSES = [
+  'awaiting_payment',
+  'payment_submitted',
+  'payment_rejected',
+  'approved',
+  'rejected',
+  'completed',
+];
+
 // @desc    Create new booking
 // @route   POST /api/bookings
 // @access  Private/Customer
@@ -101,7 +110,15 @@ const createBooking = async (req, res) => {
 // @access  Private/Admin/Manager
 const getBookings = async (req, res) => {
   try {
-    const bookings = await Booking.find()
+    let filter = {};
+
+    // Managers may only list bookings for halls they own.
+    if (req.user.role !== 'admin') {
+      const halls = await Hall.find({ manager: req.user.id }).select('_id');
+      filter = { hallId: { $in: halls.map((hall) => hall._id) } };
+    }
+
+    const bookings = await Booking.find(filter)
       .populate('customerId', 'name email')
       .populate('hallId', 'name');
     res.status(200).json(bookings);
@@ -170,8 +187,20 @@ const updateBookingStatus = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
+    // Managers may only change bookings for their own halls.
+    if (req.user.role !== 'admin') {
+      if (!booking.hallId || booking.hallId.manager.toString() !== req.user.id) {
+        return res.status(403).json({ message: 'Not authorized to update this booking' });
+      }
+    }
+
+    const { status } = req.body;
+    if (!BOOKING_STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Invalid booking status' });
+    }
+
     const oldStatus = booking.status;
-    booking.status = req.body.status || booking.status;
+    booking.status = status;
     
     // If booking is being marked as completed, create commission payment
     if (booking.status === 'completed' && oldStatus !== 'completed') {
@@ -205,10 +234,17 @@ const updateBookingStatus = async (req, res) => {
 // @access  Private/Admin/Manager
 const deleteBooking = async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.id);
+    const booking = await Booking.findById(req.params.id).populate('hallId', 'manager');
 
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    // Managers may only delete bookings for their own halls.
+    if (req.user.role !== 'admin') {
+      if (!booking.hallId || booking.hallId.manager.toString() !== req.user.id) {
+        return res.status(403).json({ message: 'Not authorized to delete this booking' });
+      }
     }
 
     await booking.deleteOne();
@@ -390,6 +426,10 @@ const addCustomFood = async (req, res) => {
 const updateCustomFoodStatus = async (req, res) => {
   try {
     const { status } = req.body;
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid custom food status' });
+    }
+
     const booking = await Booking.findById(req.params.id).populate('hallId');
 
     if (!booking) {
@@ -397,7 +437,10 @@ const updateCustomFoodStatus = async (req, res) => {
     }
 
     const hall = await Hall.findById(booking.hallId._id);
-    if (hall.manager.toString() !== req.user.id) {
+    if (!hall) {
+      return res.status(404).json({ message: 'Hall not found' });
+    }
+    if (req.user.role !== 'admin' && hall.manager.toString() !== req.user.id) {
       return res.status(403).json({ message: 'Not authorized to update this booking' });
     }
 
