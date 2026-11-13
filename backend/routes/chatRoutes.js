@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { chatWithAI, chatStreamWithAI, getMessages, getConversations } = require('../controllers/chatController');
 const { protect } = require('../middleware/authMiddleware');
-const { chatRateLimiter } = require('../middleware/rateLimiter');
+const { chatUserRateLimiter, chatGlobalRateLimiter } = require('../middleware/rateLimiter');
 const { validate } = require('../middleware/validate');
 const {
   chatMessageSchema,
@@ -10,8 +10,24 @@ const {
   chatHistoryParamsSchema,
 } = require('../validators/chatValidator');
 
-router.post('/', protect, chatRateLimiter, validate({ body: chatMessageSchema }), chatWithAI);
-router.post('/stream', protect, chatRateLimiter, validate({ body: chatStreamSchema }), chatStreamWithAI);
+// A request that fails validation never reaches the AI, so the global budget
+// only counts requests that will actually consume provider calls.
+router.post(
+  '/',
+  protect,
+  chatUserRateLimiter,
+  validate({ body: chatMessageSchema }),
+  chatGlobalRateLimiter,
+  chatWithAI
+);
+router.post(
+  '/stream',
+  protect,
+  chatUserRateLimiter,
+  validate({ body: chatStreamSchema }),
+  chatGlobalRateLimiter,
+  chatStreamWithAI
+);
 
 // Identity is taken from the JWT; the client only supplies the other participant.
 router.get(
