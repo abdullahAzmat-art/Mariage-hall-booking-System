@@ -39,6 +39,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api', require('./routes/authRoutes'));
 app.use('/api/halls', require('./routes/hallRoutes'));
 app.use('/api/bookings', require('./routes/bookingRoutes'));
+app.use('/api/packages', require('./routes/packageRoutes'));
 app.use('/api/complaints', require('./routes/complaintRoutes'));
 app.use('/api/chat', require('./routes/chatRoutes'));
 app.use('/api/commissions', require('./routes/commissionRoutes'));

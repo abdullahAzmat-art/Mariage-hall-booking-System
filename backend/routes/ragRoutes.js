@@ -2,7 +2,9 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const { protect, authorize } = require('../middleware/authMiddleware');
+const { validate } = require('../middleware/validate');
 const { uploadDocument, getDocuments, deleteDocument } = require('../controllers/ragController');
+const { ragUploadSchema, ragDeleteParamsSchema } = require('../validators/ragValidator');
 
 // Use memory storage — we process the buffer directly, no disk needed
 const upload = multer({
@@ -22,8 +24,21 @@ const upload = multer({
     },
 });
 
-router.post('/upload', protect, authorize('admin'), upload.single('document'), uploadDocument);
+router.post(
+    '/upload',
+    protect,
+    authorize('admin'),
+    upload.single('document'),
+    validate({ body: ragUploadSchema }),
+    uploadDocument
+);
 router.get('/documents', protect, authorize('admin'), getDocuments);
-router.delete('/documents/:id', protect, authorize('admin'), deleteDocument);
+router.delete(
+    '/documents/:id',
+    protect,
+    authorize('admin'),
+    validate({ params: ragDeleteParamsSchema }),
+    deleteDocument
+);
 
 module.exports = router;
