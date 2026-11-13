@@ -12,6 +12,8 @@ const Booking = require('../models/bookingModel');
 const CommissionPayment = require('../models/commissionPaymentModel');
 const Hall = require('../models/hallModel');
 const connectDB = require('../config/db');
+const { createCommissionPayment } = require('../controllers/commissionController');
+const { getCommissionPercentage } = require('../services/bookingRules');
 
 const createMissingCommissions = async () => {
     try {
@@ -43,17 +45,9 @@ const createMissingCommissions = async () => {
                 continue;
             }
 
-            // Create commission payment
-            const commissionAmount = booking.totalAmount * 0.05;
-            const dueDate = new Date();
-            dueDate.setDate(dueDate.getDate() + 2);
-
-            const payment = await CommissionPayment.create({
-                bookingId: booking._id,
-                managerId: hall.manager,
-                amount: commissionAmount,
-                dueDate
-            });
+            // Create commission payment (idempotent: one record per booking)
+            const commissionAmount = Math.round(booking.totalAmount * getCommissionPercentage());
+            await createCommissionPayment(booking._id, hall.manager, commissionAmount);
 
             console.log(`✓ Created commission payment for booking ${booking._id} - Amount: Rs ${commissionAmount}`);
             created++;

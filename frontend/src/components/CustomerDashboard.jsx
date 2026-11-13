@@ -17,6 +17,8 @@ const statusConfig = {
     awaiting_payment:  { label: 'Awaiting Payment',   cls: 'bg-orange-100 text-orange-700' },
     payment_rejected:  { label: 'Payment Rejected',   cls: 'bg-red-100 text-red-700' },
     rejected:          { label: 'Rejected',           cls: 'bg-red-100 text-red-700' },
+    cancelled:         { label: 'Cancelled',          cls: 'bg-gray-100 text-gray-600' },
+    expired:           { label: 'Expired',            cls: 'bg-gray-100 text-gray-600' },
     pending:           { label: 'Pending',            cls: 'bg-amber-100 text-amber-700' },
 };
 
@@ -107,6 +109,17 @@ const CustomerDashboard = () => {
             fetchBookings();
         } catch (error) {
             alert(error.response?.data?.message || 'Failed to submit payment proof');
+        }
+    };
+
+    const handleCancelBooking = async (booking) => {
+        if (!window.confirm('Cancel this booking? This action cannot be undone.')) return;
+        try {
+            await bookingService.cancelBooking(booking._id);
+            alert('Booking cancelled successfully');
+            fetchBookings();
+        } catch (error) {
+            alert(error.response?.data?.message || 'Failed to cancel booking');
         }
     };
 
@@ -257,6 +270,14 @@ const CustomerDashboard = () => {
                                                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-terracotta text-white rounded-full text-xs font-bold hover:bg-terracotta/90 transition-colors"
                                                             >
                                                                 <FaUpload className="text-[10px]" /> Upload
+                                                            </button>
+                                                        )}
+                                                        {['awaiting_payment', 'payment_rejected', 'approved'].includes(booking.status) && (
+                                                            <button
+                                                                onClick={() => handleCancelBooking(booking)}
+                                                                className="ml-2 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-bold hover:bg-gray-200 transition-colors"
+                                                            >
+                                                                Cancel
                                                             </button>
                                                         )}
                                                     </td>

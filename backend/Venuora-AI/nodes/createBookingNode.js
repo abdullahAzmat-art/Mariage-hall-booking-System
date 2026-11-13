@@ -1,16 +1,18 @@
-﻿import Booking from "../../models/bookingModel.js";
+import bookingServiceModule from "../../services/bookingService.js";
+
+const { createBookingForUser } = bookingServiceModule;
 
 /**
  * CREATE BOOKING NODE
  * ─────────────────────────────────────────────
  * Runs AFTER booking_requirements receives the form data.
- * Takes state.booking and saves it to the database.
+ * Uses the same trusted booking service as POST /api/bookings, so the AI path
+ * gets identical validation, pricing, double-booking protection and status
+ * handling.
  */
 export async function createBookingNode(state) {
   const data = state.booking;
-console.log(data , "data in createBookingNode");
-console.log(data.hallId , "halls id ")
-console.log(data.customerid , "halls id ")
+
   if (!data || !data.hallId || !state.userId) {
     return {
       answer: "Booking failed. Missing required information. Please try again.",
@@ -18,37 +20,40 @@ console.log(data.customerid , "halls id ")
   }
 
   try {
-    // Identity comes from the authenticated API request, never from form data.
-    const bookingData = {
-      ...data,
+    // Identity always comes from the authenticated API request.
+    const newBooking = await createBookingForUser({
       customerId: state.userId,
-      hallId: state.selectedHall?._id || data.hallId,
-    };
+      payload: data,
+    });
 
-    // Save the booking to MongoDB
-    const newBooking = await Booking.create(bookingData);
+    const booking = newBooking.toObject ? newBooking.toObject() : newBooking;
+    const percentage = Math.round((booking.prebookingPercentage || 0.1) * 100);
 
-    console.log("\n✅ [CREATE_BOOKING] Booking saved to DB:", newBooking._id);
+    console.log("\n✅ [CREATE_BOOKING] Booking saved to DB:", booking._id);
 
     return {
-     
-answer: `🎉 Your booking is confirmed!
+      booking,
+      answer: `🎉 Your booking is confirmed!
 
 **Booking Summary:**
 - Hall: ${state.selectedHall?.name}
-- Date: ${data.eventDate}
-- Guests: ${data.guestsCount}
-- Total: Rs ${data.totalAmount?.toLocaleString()}
-- Pre-booking to pay: Rs ${data.prebookingAmount?.toLocaleString()}
+- Date: ${booking.eventDateKey || data.eventDate}
+- Time: ${booking.timeSlot}
+- Guests: ${booking.guestsCount}
+- Total: Rs ${Number(booking.totalAmount).toLocaleString()}
+- Pre-booking to pay (${percentage}%): Rs ${Number(booking.prebookingAmount).toLocaleString()}
 
-Please review your booking details in your dashboard and complete the 10% pre-booking payment to secure your booking. 💳
+Please review your booking details in your dashboard and submit the payment proof. 💳
 
-Thank you for choosing Venuora! 🌟`
-
-,
+Thank you for choosing Venuora! 🌟`,
     };
   } catch (error) {
-    console.error("\n❌ [CREATE_BOOKING] DB Error:", error.message);
+    console.error("\n❌ [CREATE_BOOKING] Booking error:", error.message);
+
+    if (error && error.status && error.message) {
+      return { answer: `Booking failed: ${error.message}` };
+    }
+
     return {
       answer: "Sorry, we could not save your booking. Please try again or contact support.",
     };

@@ -33,7 +33,9 @@ const HallDetails = () => {
         });
     };
 
-    const [hallBookings, setHallBookings] = useState([]);
+    // Availability comes from the backend service so manager-blocked dates and
+    // real bookings are evaluated with the same rules as booking creation.
+    const [availability, setAvailability] = useState({ blockedDates: [], bookings: [] });
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -41,19 +43,40 @@ const HallDetails = () => {
             try {
                 const hallData = await hallService.getHallById(id);
                 setHall(hallData);
-                
-                // Fetch bookings for this hall
-                const bookingsData = await bookingService.getHallBookings(id);
-                setHallBookings(bookingsData);
+
+                try {
+                    const availabilityData = await bookingService.getHallAvailability(id);
+                    setAvailability(availabilityData);
+                } catch (availabilityError) {
+                    console.error('Failed to fetch availability', availabilityError);
+                    setAvailability({ blockedDates: hallData.bookedDates || [], bookings: [] });
+                }
             } catch (error) {
                 console.error("Failed to fetch data", error);
-                // Optional: Set an error state to display to the user
             } finally {
                 setLoading(false);
             }
         };
         fetchData();
     }, [id]);
+
+    const toLocalDateKey = (date) =>
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+    const parseDateKey = (key) => {
+        const [year, month, day] = key.split('-').map(Number);
+        return new Date(year, month - 1, day);
+    };
+
+    // Date keys are compared as strings, so there is no UTC/local timezone shift.
+    const isDateUnavailable = (date) => {
+        const dateKey = toLocalDateKey(date);
+        const managerBlocked = (availability.blockedDates || []).includes(dateKey);
+        const slotBooked = (availability.bookings || []).some(
+            (booking) => booking.eventDateKey === dateKey && booking.timeSlot === bookingData.functionTime
+        );
+        return managerBlocked || slotBooked;
+    };
 
     if (loading) {
         return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
@@ -188,35 +211,18 @@ const HallDetails = () => {
                                             <label className="block text-sm font-medium text-gray-700 mb-2">Event Date</label>
                                             <div className="rounded-lg border border-gray-200 overflow-hidden">
                                                 <Calendar
-                                                    value={bookingData.eventDate ? new Date(bookingData.eventDate) : null}
+                                                    value={bookingData.eventDate ? parseDateKey(bookingData.eventDate) : null}
                                                     onChange={(date) => {
-                                                        const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-                                                        setBookingData({ ...bookingData, eventDate: localDate });
+                                                        setBookingData({ ...bookingData, eventDate: toLocalDateKey(date) });
                                                     }}
                                                     tileClassName={({ date, view }) => {
                                                         if (view === 'month') {
-                                                            const dateString = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-                                                            const isInBookedDates = (hall.bookedDates || []).some(d =>
-                                                                new Date(d).toISOString().split('T')[0] === dateString
-                                                            );
-                                                            const isInBookings = hallBookings.some(b => {
-                                                                const bDate = new Date(b.eventDate).toISOString().split('T')[0];
-                                                                return bDate === dateString && b.timeSlot === bookingData.functionTime;
-                                                            });
-                                                            return (isInBookedDates || isInBookings) ? 'booked-tile' : 'available-tile';
+                                                            return isDateUnavailable(date) ? 'booked-tile' : 'available-tile';
                                                         }
                                                     }}
                                                     tileDisabled={({ date, view }) => {
                                                         if (view === 'month') {
-                                                            const dateString = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-                                                            const isInBookedDates = (hall.bookedDates || []).some(d =>
-                                                                new Date(d).toISOString().split('T')[0] === dateString
-                                                            );
-                                                            const isInBookings = hallBookings.some(b => {
-                                                                const bDate = new Date(b.eventDate).toISOString().split('T')[0];
-                                                                return bDate === dateString && b.timeSlot === bookingData.functionTime;
-                                                            });
-                                                            return isInBookedDates || isInBookings;
+                                                            return isDateUnavailable(date);
                                                         }
                                                     }}
                                                     className="w-full border-none"
@@ -224,7 +230,7 @@ const HallDetails = () => {
                                             </div>
                                             {bookingData.eventDate && (
                                                 <p className="text-sm text-primary font-medium mt-2">
-                                                    ✅ Selected: {new Date(bookingData.eventDate).toLocaleDateString('en-PK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                                    ✅ Selected: {parseDateKey(bookingData.eventDate).toLocaleDateString('en-PK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                                                 </p>
                                             )}
                                         </div>
@@ -305,14 +311,7 @@ const HallDetails = () => {
                                                         return;
                                                     }
 
-                                                    // Check if date and time slot is booked
-                                                    const formattedDate = new Date(bookingData.eventDate).toISOString().split('T')[0];
-                                                    const isBooked = hallBookings.some(b => {
-                                                        const bDate = new Date(b.eventDate).toISOString().split('T')[0];
-                                                        return bDate === formattedDate && b.timeSlot === bookingData.functionTime;
-                                                    });
-
-                                                    if (isBooked) {
+                                                    if (isDateUnavailable(parseDateKey(bookingData.eventDate))) {
                                                         toast.error("This date and time slot is unavailable. Please select another.");
                                                         return;
                                                     }
@@ -356,40 +355,12 @@ const HallDetails = () => {
                                 <Calendar
                                     tileClassName={({ date, view }) => {
                                         if (view === 'month') {
-                                            const dateString = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-
-                                            // Check hall.bookedDates array (direct from hall model)
-                                            const isInBookedDates = (hall.bookedDates || []).some(d => {
-                                                return new Date(d).toISOString().split('T')[0] === dateString;
-                                            });
-
-                                            // Check hallBookings (from booking records) matching the selected time slot
-                                            const isInBookings = hallBookings.some(b => {
-                                                const bDate = new Date(b.eventDate).toISOString().split('T')[0];
-                                                return bDate === dateString && b.timeSlot === bookingData.functionTime;
-                                            });
-
-                                            const isBooked = isInBookedDates || isInBookings;
-
-                                            return isBooked
-                                                ? 'booked-tile'
-                                                : 'available-tile';
+                                            return isDateUnavailable(date) ? 'booked-tile' : 'available-tile';
                                         }
                                     }}
                                     tileDisabled={({ date, view }) => {
                                         if (view === 'month') {
-                                            const dateString = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-
-                                            const isInBookedDates = (hall.bookedDates || []).some(d => {
-                                                return new Date(d).toISOString().split('T')[0] === dateString;
-                                            });
-
-                                            const isInBookings = hallBookings.some(b => {
-                                                const bDate = new Date(b.eventDate).toISOString().split('T')[0];
-                                                return bDate === dateString && b.timeSlot === bookingData.functionTime;
-                                            });
-
-                                            return isInBookedDates || isInBookings;
+                                            return isDateUnavailable(date);
                                         }
                                     }}
                                 />

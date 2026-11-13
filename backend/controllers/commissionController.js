@@ -1,24 +1,38 @@
 const CommissionPayment = require('../models/commissionPaymentModel');
 const Booking = require('../models/bookingModel');
-const User = require('../models/userModel');
-const Hall = require('../models/hallModel');
 
-// Create commission payment record (called when booking is completed)
+// Create the single commission record for a booking. Safe to call repeatedly:
+// the unique bookingId index plus the upsert prevent duplicate charges.
 const createCommissionPayment = async (bookingId, managerId, amount) => {
     try {
         const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + 2); // 2 days from now
+        dueDate.setDate(dueDate.getDate() + 2);
 
-        const commissionPayment = new CommissionPayment({
-            bookingId,
-            managerId,
-            amount,
-            dueDate
-        });
+        const payment = await CommissionPayment.findOneAndUpdate(
+            { bookingId },
+            {
+                $setOnInsert: {
+                    bookingId,
+                    managerId,
+                    amount,
+                    dueDate,
+                    status: 'pending',
+                },
+            },
+            {
+                new: true,
+                upsert: true,
+                setDefaultsOnInsert: true,
+            }
+        );
 
-        await commissionPayment.save();
-        return commissionPayment;
+        return payment;
     } catch (error) {
+        if (error && error.code === 11000) {
+            // A concurrent request created it first; return that record.
+            const existing = await CommissionPayment.findOne({ bookingId });
+            if (existing) return existing;
+        }
         console.error('Error creating commission payment:', error);
         throw error;
     }
@@ -28,13 +42,13 @@ const createCommissionPayment = async (bookingId, managerId, amount) => {
 const uploadPaymentProof = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         if (!req.file) {
             return res.status(400).json({ message: 'Please upload a payment proof image' });
         }
 
         const payment = await CommissionPayment.findById(id);
-        
+
         if (!payment) {
             return res.status(404).json({ message: 'Payment record not found' });
         }
@@ -44,7 +58,13 @@ const uploadPaymentProof = async (req, res) => {
             return res.status(403).json({ message: 'Not authorized' });
         }
 
+        if (payment.status === 'verified') {
+            return res.status(400).json({ message: 'This commission payment is already verified' });
+        }
+
         payment.paymentProof = req.file.path;
+        payment.status = 'pending';
+        payment.rejectionReason = null;
         await payment.save();
 
         res.json(payment);
@@ -68,7 +88,10 @@ const getManagerPayments = async (req, res) => {
 // Get all pending payments (Admin)
 const getPendingPayments = async (req, res) => {
     try {
-        const payments = await CommissionPayment.find({ status: 'pending', paymentProof: { $ne: null } })
+        const payments = await CommissionPayment.find({
+            status: { $in: ['pending', 'overdue'] },
+            paymentProof: { $nin: ['', null] },
+        })
             .populate('bookingId')
             .populate('managerId', 'name email')
             .sort({ createdAt: -1 });
@@ -88,12 +111,23 @@ const verifyPayment = async (req, res) => {
             return res.status(404).json({ message: 'Payment not found' });
         }
 
+        if (payment.status === 'verified') {
+            return res.json(payment);
+        }
+
+        if (!payment.paymentProof) {
+            return res.status(400).json({ message: 'No payment proof uploaded for this record' });
+        }
+
         payment.status = 'verified';
         payment.verifiedBy = req.user._id;
+        payment.rejectionReason = null;
         await payment.save();
 
-        // Update booking commission status
-        await Booking.findByIdAndUpdate(payment.bookingId, { commissionPaid: true });
+        await Booking.findByIdAndUpdate(payment.bookingId, {
+            commissionPaid: true,
+            commissionAmount: payment.amount,
+        });
 
         res.json(payment);
     } catch (error) {
@@ -106,7 +140,11 @@ const rejectPayment = async (req, res) => {
     try {
         const { id } = req.params;
         const { reason } = req.body;
-        
+
+        if (typeof reason !== 'string' || !reason.trim()) {
+            return res.status(400).json({ message: 'A rejection reason is required' });
+        }
+
         const payment = await CommissionPayment.findById(id);
 
         if (!payment) {
@@ -114,7 +152,7 @@ const rejectPayment = async (req, res) => {
         }
 
         payment.status = 'rejected';
-        payment.rejectionReason = reason;
+        payment.rejectionReason = reason.trim().slice(0, 500);
         payment.paymentProof = null; // Clear proof so manager can re-upload
         await payment.save();
 
@@ -124,26 +162,17 @@ const rejectPayment = async (req, res) => {
     }
 };
 
-// Check overdue payments and delete halls/managers
+// Mark overdue commissions. Records and halls/managers are preserved so
+// payment and booking history is never destroyed.
 const checkOverduePayments = async () => {
     try {
-        const now = new Date();
-        const overduePayments = await CommissionPayment.find({
-            status: 'pending',
-            dueDate: { $lt: now }
-        }).populate('managerId');
+        const result = await CommissionPayment.updateMany(
+            { status: 'pending', dueDate: { $lt: new Date() } },
+            { $set: { status: 'overdue' } }
+        );
 
-        for (const payment of overduePayments) {
-            // Delete all halls owned by this manager
-            await Hall.deleteMany({ managerId: payment.managerId._id });
-            
-            // Delete the manager account
-            await User.findByIdAndDelete(payment.managerId._id);
-            
-            // Delete the payment record
-            await CommissionPayment.findByIdAndDelete(payment._id);
-            
-            console.log(`Deleted manager ${payment.managerId.email} due to overdue payment`);
+        if (result.modifiedCount > 0) {
+            console.log(`Marked ${result.modifiedCount} commission payment(s) as overdue`);
         }
     } catch (error) {
         console.error('Error checking overdue payments:', error);

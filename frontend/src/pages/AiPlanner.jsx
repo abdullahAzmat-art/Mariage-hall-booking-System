@@ -29,6 +29,7 @@ const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
     const [guestsCount, setGuestsCount] = useState('');
     const [eventDate, setEventDate] = useState('');
     const [eventType, setEventType] = useState('Wedding');
+    const [timeSlot, setTimeSlot] = useState('Morning');
     const [phone, setPhone] = useState('');
     const [cnic, setCnic] = useState('');
     const [selectedFood, setSelectedFood] = useState({});
@@ -37,14 +38,16 @@ const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
     
     const hallPrice = Number(bookingForm.hallPrice) || 0;
     const hallMenu = bookingForm.hallMenu || [];
+    const prebookingPercentage = Number(bookingForm.prebookingPercentage) || 0.1;
     
     const customSeatPrice = hallMenu.reduce((total, item) => {
         return selectedFood[item.name] ? total + Number(item.price) : total;
     }, 0);
     
+    // Display estimate only. The backend recalculates the final amount.
     const finalPricePerHead = hallPrice + customSeatPrice;
     const totalAmount = (Number(guestsCount) || 0) * finalPricePerHead;
-    const prebookingAmount = totalAmount * 0.2;
+    const prebookingAmount = totalAmount * prebookingPercentage;
     
     const handleFoodToggle = (itemName) => {
         setSelectedFood(prev => ({ ...prev, [itemName]: !prev[itemName] }));
@@ -55,18 +58,20 @@ const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
         setIsSubmitting(true);
         try {
             // Build the form data payload
+            // Quantity is servings per head. The backend validates each item
+            // against the hall menu and calculates all prices itself.
             const customFoodPayload = hallMenu
                 .filter(item => selectedFood[item.name])
-                .map(item => ({ itemName: item.name, price: item.price, quantity: Number(guestsCount) }));
+                .map(item => ({ itemName: item.name, quantity: 1 }));
 
             const formData = {
                 eventDate,
                 eventType,
+                timeSlot,
                 phone,
                 cnic,
-                guestsCount:   Number(guestsCount),
-                customSeatPrice,
-                customFood:    customFoodPayload,
+                guestsCount: Number(guestsCount),
+                customFood: customFoodPayload,
             };
 
             // ✅ Instead of calling bookingService directly, we RESUME the LangGraph
@@ -134,7 +139,7 @@ const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
                 <div className="grid grid-cols-2 gap-3">
                     <div>
                         <label className="block text-xs font-bold text-navy mb-1.5 uppercase tracking-wide">Event Date</label>
-                        <input type="date" required value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all" />
+                        <input type="date" required min={bookingForm.businessToday} value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all" />
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-navy mb-1.5 uppercase tracking-wide">Guests</label>
@@ -142,15 +147,24 @@ const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                     <div>
                         <label className="block text-xs font-bold text-navy mb-1.5 uppercase tracking-wide">Event Type</label>
                         <select value={eventType} onChange={(e) => setEventType(e.target.value)} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all">
                             <option value="Wedding">Wedding</option>
+                            <option value="Reception">Reception</option>
                             <option value="Engagement">Engagement</option>
                             <option value="Birthday">Birthday</option>
                             <option value="Corporate">Corporate</option>
                             <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-navy mb-1.5 uppercase tracking-wide">Time Slot</label>
+                        <select value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all">
+                            <option value="Morning">Morning</option>
+                            <option value="Afternoon">Afternoon</option>
+                            <option value="Evening">Evening</option>
                         </select>
                     </div>
                 </div>
@@ -206,7 +220,7 @@ const InlineBookingForm = ({ bookingForm, threadId, onBookingConfirmed }) => {
                         <span className="font-bold text-navy text-lg">Rs {totalAmount.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs pt-1">
-                        <span className="text-gray-500 font-medium">Pre-booking to pay (20%):</span>
+                        <span className="text-gray-500 font-medium">Pre-booking to pay ({Math.round(prebookingPercentage * 100)}%):</span>
                         <span className="font-bold text-gold">Rs {prebookingAmount.toLocaleString()}</span>
                     </div>
                 </div>

@@ -13,6 +13,9 @@ const {
   updateCustomFoodStatus,
   getManagerBookings,
   getHallBookings,
+  getHallAvailabilityStatus,
+  cancelBooking,
+  rejectBooking,
 } = require('../controllers/bookingController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
@@ -21,6 +24,8 @@ router
   .route('/')
   .post(protect, authorize('customer'), createBooking)
   .get(protect, authorize('admin', 'manager'), getBookings);
+
+router.get('/hall/:hallId/availability', getHallAvailabilityStatus);
 
 router.get('/hall/:hallId', getHallBookings);
 
@@ -32,13 +37,17 @@ router.put('/:id/status', protect, authorize('admin', 'manager'), updateBookingS
 
 router.put('/:id/payment-proof', protect, authorize('customer'), upload.single('paymentProof'), submitPaymentProof);
 
-router.put('/:id/verify-payment', protect, authorize('manager'), verifyPayment);
+router.put('/:id/verify-payment', protect, authorize('admin', 'manager'), verifyPayment);
 
-router.put('/:id/reject-payment', protect, authorize('manager'), rejectPayment);
+router.put('/:id/reject-payment', protect, authorize('admin', 'manager'), rejectPayment);
+
+router.put('/:id/cancel', protect, authorize('customer'), cancelBooking);
+
+router.put('/:id/reject', protect, authorize('admin', 'manager'), rejectBooking);
 
 router.delete('/:id', protect, authorize('admin', 'manager'), deleteBooking);
 
 router.post('/:id/custom-food', protect, authorize('customer'), addCustomFood);
-router.patch('/:id/custom-food-status', protect, authorize('manager'), updateCustomFoodStatus);
+router.patch('/:id/custom-food-status', protect, authorize('admin', 'manager'), updateCustomFoodStatus);
 
 module.exports = router;

@@ -3,7 +3,6 @@ import { FaCalendarAlt, FaUser, FaBoxOpen, FaMoneyBillWave, FaUtensils, FaPlus, 
 import { useLocation, useNavigate } from 'react-router-dom';
 import bookingService from '../services/bookingService';
 import packageService from '../services/packageService';
-import hallService from '../services/hallService';
 import authService from '../services/authService';
 import toast from 'react-hot-toast';
 
@@ -17,6 +16,8 @@ const Booking = () => {
     const [createdBooking, setCreatedBooking] = useState(null);
     const [paymentProof, setPaymentProof] = useState(null);
     const [transactionId, setTransactionId] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
     // Food Customization State
     const [menu, setMenu] = useState([]);
@@ -103,8 +104,6 @@ const Booking = () => {
     const foodTotal = customFood.reduce((total, item) => total + (item.price * item.quantity), 0);
     const totalPrice = (hall ? (hall.price + foodTotal) * (formData.guestCount || 0) : 0) + (selectedPackage ? selectedPackage.price : 0);
     const prebookingAmount = totalPrice * 0.1;
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
 
 
 
@@ -134,9 +133,14 @@ const Booking = () => {
                 hallId: hall._id,
                 eventDate: formData.eventDate,
                 timeSlot: formData.timeSlot,
+                eventType: formData.eventType,
+                phone: formData.phone,
+                cnic: formData.cnic,
                 guestsCount: formData.guestCount,
-                totalAmount: totalPrice,
-                customFood: customFood
+                packageId: formData.packageId || undefined,
+                // Prices and totals are calculated by the backend from trusted
+                // hall/package data. Only item names and quantities are sent.
+                customFood: customFood.map(({ itemName, quantity }) => ({ itemName, quantity }))
             };
             const booking = await bookingService.createBooking(bookingPayload);
             setCreatedBooking(booking);
@@ -442,19 +446,26 @@ const Booking = () => {
                                         <div className="space-y-3 text-gray-700">
                                             <div className="flex justify-between items-center">
                                                 <span className="text-lg">Total Booking Amount:</span>
-                                                <span className="font-bold text-xl">Rs {totalPrice.toLocaleString()}</span>
+                                                <span className="font-bold text-xl">Rs {(createdBooking?.totalAmount ?? totalPrice).toLocaleString()}</span>
                                             </div>
                                             <div className="flex justify-between items-center border-t-2 border-primary/20 pt-3">
-                                                <span className="text-lg font-semibold text-primary">10% Prebooking Amount:</span>
-                                                <span className="font-bold text-2xl text-primary">Rs {prebookingAmount.toLocaleString()}</span>
+                                                <span className="text-lg font-semibold text-primary">
+                                                    {Math.round((createdBooking?.prebookingPercentage ?? 0.1) * 100)}% Prebooking Amount:
+                                                </span>
+                                                <span className="font-bold text-2xl text-primary">Rs {(createdBooking?.prebookingAmount ?? prebookingAmount).toLocaleString()}</span>
                                             </div>
+                                            {createdBooking?.paymentExpiresAt && (
+                                                <p className="text-sm text-gray-600 pt-2">
+                                                    Complete payment before {new Date(createdBooking.paymentExpiresAt).toLocaleString()}.
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
                                     <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
                                         <h4 className="font-bold text-blue-900 mb-2">Payment Instructions:</h4>
                                         <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800">
-                                            <li>Transfer Rs {prebookingAmount.toLocaleString()} to the hall's bank account</li>
+                                            <li>Transfer Rs {(createdBooking?.prebookingAmount ?? prebookingAmount).toLocaleString()} to the hall's bank account</li>
                                             <li>Take a screenshot of the transaction confirmation</li>
                                             <li>Note down your Transaction ID</li>
                                             <li>Upload the screenshot and enter Transaction ID below</li>

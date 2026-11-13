@@ -1,107 +1,81 @@
 const Booking = require('../models/bookingModel');
 const Hall = require('../models/hallModel');
+const { createCommissionPayment } = require('./commissionController');
 
-const BOOKING_STATUSES = [
-  'awaiting_payment',
-  'payment_submitted',
-  'payment_rejected',
-  'approved',
-  'rejected',
-  'completed',
-];
+const {
+  BOOKING_STATUSES,
+  BookingError,
+  assertStatusTransition,
+  calculateBookingAmounts,
+  getCommissionPercentage,
+  getPrebookingPercentage,
+  normalizeCustomFood,
+  normalizeTransactionId,
+  readString,
+} = require('../services/bookingRules');
+const {
+  applyCancellation,
+  assertCanCancel,
+  createBookingForUser,
+  paymentDeadline,
+  verifyBookingAvailability,
+} = require('../services/bookingService');
+const {
+  expireStaleBookings,
+  getHallAvailability,
+} = require('../services/availabilityService');
+
+const sendError = (res, error, fallback = 'Something went wrong. Please try again.') => {
+  if (error && Number.isInteger(error.status)) {
+    return res.status(error.status).json({
+      message: error.message,
+      ...(error.code ? { code: error.code } : {}),
+    });
+  }
+  if (error && error.name === 'ValidationError') {
+    return res.status(400).json({ message: error.message });
+  }
+  if (error && error.name === 'CastError') {
+    return res.status(400).json({ message: 'Invalid identifier' });
+  }
+
+  console.error('Booking error:', error);
+  return res.status(500).json({ message: fallback });
+};
+
+const assertManagerCanManage = (booking, user) => {
+  if (user.role === 'admin') return;
+
+  const managerId = booking.hallId?.manager;
+  if (!managerId || managerId.toString() !== user.id) {
+    throw new BookingError('Not authorized to manage this booking', 403, 'forbidden');
+  }
+};
+
+const recalculateForFood = (booking, hall, foodPerHead) => {
+  const hallPrice = Number(booking.hallPrice ?? hall.price) || 0;
+  const packagePrice = Number(booking.packagePrice) || 0;
+
+  return calculateBookingAmounts({
+    hallPrice,
+    foodPerHead,
+    guestsCount: booking.guestsCount,
+    packagePrice,
+  });
+};
 
 // @desc    Create new booking
 // @route   POST /api/bookings
 // @access  Private/Customer
 const createBooking = async (req, res) => {
-  const { hallId, eventDate, timeSlot, guestsCount, totalAmount, customFood } = req.body;
-
-  if (!hallId || !eventDate || !timeSlot || !guestsCount || !totalAmount) {
-    return res.status(400).json({ message: 'Please add all fields' });
-  }
-
   try {
-    // Check for double booking with same date and time slot
-    const existingBooking = await Booking.findOne({
-      hallId,
-      eventDate: new Date(eventDate),
-      timeSlot,
-      status: { $nin: ['rejected', 'payment_rejected'] },
-    });
-
-    if (existingBooking) {
-      return res.status(400).json({ message: 'Hall is already booked for this date and time slot' });
-    }
-
-    // Check if hall exists
-    const hall = await Hall.findById(hallId);
-    if (!hall) {
-      return res.status(404).json({ message: 'Hall not found' });
-    }
-
-    // Check capacity
-    if (guestsCount > hall.capacity) {
-      return res.status(400).json({ message: `Guest count cannot exceed hall capacity of ${hall.capacity}` });
-    }
-
-    // Handle Custom Food
-    let customSeatPrice = 0;
-    let foodTotal = 0;
-    let finalCustomFood = [];
-
-    if (customFood && customFood.length > 0) {
-        // Validate items against hall menu
-        const hallMenu = hall.menu || [];
-        
-        customFood.forEach(item => {
-            const menuItem = hallMenu.find(m => m.name === item.itemName);
-            if (menuItem) {
-                finalCustomFood.push({
-                    itemName: item.itemName,
-                    price: menuItem.price,
-                    quantity: item.quantity
-                });
-                foodTotal += menuItem.price * item.quantity;
-            }
-        });
-        
-        // Calculate custom seat price (Base + Food)
-        // Note: foodTotal here is total cost for one person if quantity is 1? 
-        // Wait, the previous logic was: foodTotal += item.price * item.quantity
-        // If I order 1 Chicken Biryani (Rs 500), and I have 100 guests.
-        // Is the customFood quantity per guest or total?
-        // Usually "Menu" selection is per guest. "I want Biryani and Salad for everyone".
-        // So quantity is usually 1 per item per guest.
-        // But the UI allows quantity selection. If I select 2 Biryanis, it means 2 servings per guest?
-        // Let's assume yes, it's per head configuration.
-        
-        customSeatPrice = hall.price + foodTotal;
-    }
-
-    // Calculate 10% prebooking amount
-    // totalAmount passed from frontend should match our calculation, but let's trust frontend for now or recalculate?
-    // Better to recalculate to be safe, but package logic is on frontend.
-    // Let's use the totalAmount passed, but validate if it's not wildly off? 
-    // For now, just use the passed totalAmount as per original logic, but ensure customSeatPrice is saved.
-    
-    const prebookingAmount = totalAmount * 0.1;
-
-    const booking = await Booking.create({
+    const booking = await createBookingForUser({
       customerId: req.user.id,
-      hallId,
-      eventDate,
-      guestsCount,
-      totalAmount,
-      prebookingAmount,
-      status: 'awaiting_payment',
-      customFood: finalCustomFood,
-      customSeatPrice: customSeatPrice > 0 ? customSeatPrice : undefined,
-      customFoodStatus: finalCustomFood.length > 0 ? 'pending' : 'none'
+      payload: req.body,
     });
-
     res.status(201).json(booking);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    sendError(res, error, 'Could not create booking');
   }
 };
 
@@ -110,20 +84,24 @@ const createBooking = async (req, res) => {
 // @access  Private/Admin/Manager
 const getBookings = async (req, res) => {
   try {
-    let filter = {};
+    await expireStaleBookings();
+
+    const filter = { archived: { $ne: true } };
 
     // Managers may only list bookings for halls they own.
     if (req.user.role !== 'admin') {
       const halls = await Hall.find({ manager: req.user.id }).select('_id');
-      filter = { hallId: { $in: halls.map((hall) => hall._id) } };
+      filter.hallId = { $in: halls.map((hall) => hall._id) };
     }
 
     const bookings = await Booking.find(filter)
       .populate('customerId', 'name email')
-      .populate('hallId', 'name');
+      .populate('hallId', 'name')
+      .sort({ createdAt: -1 });
+
     res.status(200).json(bookings);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error, 'Could not load bookings');
   }
 };
 
@@ -132,47 +110,73 @@ const getBookings = async (req, res) => {
 // @access  Private/Customer
 const getMyBookings = async (req, res) => {
   try {
-    const bookings = await Booking.find({ customerId: req.user.id })
-      .populate('hallId', 'name manager');
+    await expireStaleBookings();
+
+    const bookings = await Booking.find({
+      customerId: req.user.id,
+      archived: { $ne: true },
+    })
+      .populate('hallId', 'name manager')
+      .sort({ createdAt: -1 });
+
     res.status(200).json(bookings);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error, 'Could not load your bookings');
   }
 };
 
-// @desc    Get hall bookings
+// @desc    Get hall booking slots (public, no customer data)
 // @route   GET /api/bookings/hall/:hallId
 // @access  Public
 const getHallBookings = async (req, res) => {
   try {
-    const { hallId } = req.params;
-    const bookings = await Booking.find({ 
-        hallId, 
-        status: { $nin: ['rejected', 'payment_rejected'] } 
-    }).select('eventDate timeSlot status');
-    res.status(200).json(bookings);
+    const availability = await getHallAvailability(req.params.hallId);
+    res.status(200).json(
+      availability.bookings.map((booking) => ({
+        eventDate: booking.eventDateKey,
+        eventDateKey: booking.eventDateKey,
+        timeSlot: booking.timeSlot,
+        status: booking.status,
+      }))
+    );
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error, 'Could not load hall availability');
   }
 };
+
+// @desc    Get hall availability (manager blocks + active bookings)
+// @route   GET /api/bookings/hall/:hallId/availability
+// @access  Public
+const getHallAvailabilityStatus = async (req, res) => {
+  try {
+    const availability = await getHallAvailability(req.params.hallId);
+    res.status(200).json(availability);
+  } catch (error) {
+    sendError(res, error, 'Could not load hall availability');
+  }
+};
+
 // @desc    Get manager bookings
 // @route   GET /api/bookings/manager
 // @access  Private/Manager
 const getManagerBookings = async (req, res) => {
   try {
-    // Find halls managed by this user
-    const Hall = require('../models/hallModel');
-    const halls = await Hall.find({ manager: req.user.id });
-    const hallIds = halls.map(hall => hall._id);
+    await expireStaleBookings();
 
-    // Find bookings for these halls
-    const bookings = await Booking.find({ hallId: { $in: hallIds } })
+    const halls = await Hall.find({ manager: req.user.id }).select('_id');
+    const hallIds = halls.map((hall) => hall._id);
+
+    const bookings = await Booking.find({
+      hallId: { $in: hallIds },
+      archived: { $ne: true },
+    })
       .populate('customerId', 'name email')
-      .populate('hallId', 'name manager' );
-      
+      .populate('hallId', 'name manager')
+      .sort({ createdAt: -1 });
+
     res.status(200).json(bookings);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error, 'Could not load manager bookings');
   }
 };
 
@@ -187,49 +191,81 @@ const updateBookingStatus = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    // Managers may only change bookings for their own halls.
-    if (req.user.role !== 'admin') {
-      if (!booking.hallId || booking.hallId.manager.toString() !== req.user.id) {
-        return res.status(403).json({ message: 'Not authorized to update this booking' });
-      }
-    }
+    assertManagerCanManage(booking, req.user);
 
-    const { status } = req.body;
+    const { status, reason } = req.body;
     if (!BOOKING_STATUSES.includes(status)) {
-      return res.status(400).json({ message: 'Invalid booking status' });
+      throw new BookingError('Invalid booking status');
+    }
+    if (status === 'approved' || status === 'payment_submitted') {
+      throw new BookingError(
+        'This status is set by the payment workflow, not the general status endpoint'
+      );
     }
 
-    const oldStatus = booking.status;
-    booking.status = status;
-    
-    // If booking is being marked as completed, create commission payment
-    if (booking.status === 'completed' && oldStatus !== 'completed') {
-      const commissionAmount = booking.totalAmount * 0.05; // 5% commission
-      booking.commissionAmount = commissionAmount;
-      
-      // Get the hall to access manager
-      const Hall = require('../models/hallModel');
-      const hall = await Hall.findById(booking.hallId._id);
-      
+    if (booking.status === status) {
+      return res.status(200).json(booking);
+    }
+
+    assertStatusTransition(booking.status, status);
+
+    const now = new Date();
+    const update = { status };
+
+    if (status === 'completed') {
+      update.completedAt = now;
+      update.commissionAmount = Math.round(booking.totalAmount * getCommissionPercentage());
+    }
+    if (status === 'cancelled') {
+      update.cancelledAt = now;
+      update.cancellationReason = typeof reason === 'string' ? reason.trim().slice(0, 500) : '';
+      update.paymentStatus = booking.paymentStatus === 'verified' ? 'verified' : 'cancelled';
+    }
+    if (status === 'rejected') {
+      update.rejectedAt = now;
+      update.cancellationReason = typeof reason === 'string' ? reason.trim().slice(0, 500) : '';
+    }
+    if (status === 'expired') {
+      update.expiredAt = now;
+      update.paymentStatus = 'expired';
+    }
+
+    // Conditional update prevents two managers from applying conflicting
+    // transitions to the same booking at the same time.
+    const updatedBooking = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: booking.status },
+      update,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedBooking) {
+      throw new BookingError(
+        'Booking status changed by another request. Refresh and try again.',
+        409,
+        'status_conflict'
+      );
+    }
+
+    if (status === 'completed') {
+      const hall = await Hall.findById(updatedBooking.hallId);
       if (hall && hall.manager) {
-        // Create commission payment record
-        const { createCommissionPayment } = require('./commissionController');
-        await createCommissionPayment(booking._id, hall.manager, commissionAmount);
+        await createCommissionPayment(
+          updatedBooking._id,
+          hall.manager,
+          updatedBooking.commissionAmount
+        );
       } else {
         console.error('Hall or manager not found for commission payment');
       }
     }
-    
-    const updatedBooking = await booking.save();
 
     res.status(200).json(updatedBooking);
   } catch (error) {
-    console.error('Update booking status error:', error);
-    res.status(500).json({ message: error.message });
+    sendError(res, error, 'Could not update booking status');
   }
 };
 
-// @desc    Delete booking
+// @desc    Archive a booking (history is preserved, records are not deleted)
 // @route   DELETE /api/bookings/:id
 // @access  Private/Admin/Manager
 const deleteBooking = async (req, res) => {
@@ -240,17 +276,33 @@ const deleteBooking = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    // Managers may only delete bookings for their own halls.
-    if (req.user.role !== 'admin') {
-      if (!booking.hallId || booking.hallId.manager.toString() !== req.user.id) {
-        return res.status(403).json({ message: 'Not authorized to delete this booking' });
+    assertManagerCanManage(booking, req.user);
+
+    if (booking.archived) {
+      return res.status(200).json({ message: 'Booking is already archived' });
+    }
+
+    const now = new Date();
+    const update = { archived: true };
+
+    // Release the slot for non-terminal bookings without destroying history.
+    if (!['rejected', 'cancelled', 'expired', 'completed'].includes(booking.status)) {
+      update.status = 'cancelled';
+      update.cancelledAt = now;
+      update.cancellationReason = 'Archived by management';
+      if (booking.paymentStatus !== 'verified') {
+        update.paymentStatus = 'cancelled';
       }
     }
 
-    await booking.deleteOne();
-    res.status(200).json({ message: 'Booking deleted successfully' });
+    const archived = await Booking.findByIdAndUpdate(req.params.id, update, { new: true });
+
+    res.status(200).json({
+      message: 'Booking archived. Booking and payment history has been preserved.',
+      booking: archived,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error, 'Could not archive booking');
   }
 };
 
@@ -259,43 +311,86 @@ const deleteBooking = async (req, res) => {
 // @access  Private/Customer
 const submitPaymentProof = async (req, res) => {
   try {
-    const { transactionId } = req.body;
     const booking = await Booking.findById(req.params.id);
 
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    // Verify the booking belongs to the customer
     if (booking.customerId.toString() !== req.user.id) {
       return res.status(403).json({ message: 'Not authorized to update this booking' });
     }
 
-    // Check if booking is in correct status
-    if (booking.status !== 'awaiting_payment' && booking.status !== 'payment_rejected') {
-      return res.status(400).json({ message: 'Payment proof already submitted or booking is not awaiting payment' });
+    if (!['awaiting_payment', 'payment_rejected'].includes(booking.status)) {
+      throw new BookingError(
+        'Payment proof cannot be submitted for this booking in its current status'
+      );
     }
 
-    if (!transactionId) {
-      return res.status(400).json({ message: 'Transaction ID is required' });
+    if (booking.paymentExpiresAt && booking.paymentExpiresAt.getTime() <= Date.now()) {
+      booking.status = 'expired';
+      booking.paymentStatus = 'expired';
+      booking.expiredAt = new Date();
+      await booking.save();
+      throw new BookingError(
+        'The payment window has expired. Please create a new booking.',
+        400,
+        'payment_expired'
+      );
     }
 
-    // Update booking with payment proof
+    if (booking.customFoodStatus === 'pending') {
+      throw new BookingError(
+        'Please wait for the hall manager to review your custom food request before paying'
+      );
+    }
+
+    if (!req.file || !req.file.path) {
+      throw new BookingError('A payment proof image is required');
+    }
+
+    const transactionId = normalizeTransactionId(req.body.transactionId);
+
+    const duplicate = await Booking.findOne({
+      transactionId,
+      _id: { $ne: booking._id },
+    }).select('_id');
+
+    if (duplicate) {
+      throw new BookingError(
+        'This transaction ID has already been used for another booking',
+        409,
+        'duplicate_transaction'
+      );
+    }
+
     booking.transactionId = transactionId;
-    booking.paymentProof = req.file ? req.file.path : '';
+    booking.paymentProof = req.file.path;
     booking.status = 'payment_submitted';
-    booking.paymentRejectionReason = ''; // Clear any previous rejection reason
+    booking.paymentStatus = 'submitted';
+    booking.paymentSubmittedAt = new Date();
+    booking.paymentVerified = false;
+    booking.prebookingPaid = false;
+    booking.paymentRejectionReason = '';
+    booking.verifiedBy = undefined;
+    booking.verificationDate = undefined;
 
     const updatedBooking = await booking.save();
     res.status(200).json(updatedBooking);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    if (error && error.code === 11000) {
+      return res.status(409).json({
+        message: 'This transaction ID has already been used for another booking',
+        code: 'duplicate_transaction',
+      });
+    }
+    sendError(res, error, 'Could not submit payment proof');
   }
 };
 
-// @desc    Verify payment
+// @desc    Verify payment and approve the booking
 // @route   PUT /api/bookings/:id/verify-payment
-// @access  Private/Manager
+// @access  Private/Manager/Admin
 const verifyPayment = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id).populate('hallId');
@@ -304,94 +399,107 @@ const verifyPayment = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    // Get the hall to verify manager ownership
-    const Hall = require('../models/hallModel');
-    const hall = await Hall.findById(booking.hallId._id);
+    assertManagerCanManage(booking, req.user);
 
-    if (!hall) {
-      return res.status(404).json({ message: 'Hall not found' });
-    }
-
-    // Verify the manager owns this hall
-    if (hall.manager.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Not authorized to verify this booking' });
-    }
-
-    // Check if booking has payment submitted
     if (booking.status !== 'payment_submitted') {
-      return res.status(400).json({ message: 'No payment proof submitted for this booking' });
+      throw new BookingError('No payment proof is awaiting verification for this booking');
+    }
+    if (!booking.paymentProof || !booking.transactionId) {
+      throw new BookingError('Payment proof and transaction ID are required before approval');
+    }
+    if (booking.customFoodStatus === 'pending') {
+      throw new BookingError('Review the pending custom food request before approving payment');
     }
 
-    // Verify payment
-    booking.paymentVerified = true;
-    booking.prebookingPaid = true;
-    booking.verifiedBy = req.user.id;
-    booking.verificationDate = new Date();
-    booking.status = 'approved';
+    // Availability is re-checked because the manager may have blocked the date,
+    // or the slot may have been released and re-booked since the request.
+    await verifyBookingAvailability(booking);
 
-    const updatedBooking = await booking.save();
+    const now = new Date();
+    const updatedBooking = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: 'payment_submitted' },
+      {
+        $set: {
+          paymentVerified: true,
+          prebookingPaid: true,
+          verifiedBy: req.user.id,
+          verificationDate: now,
+          status: 'approved',
+          paymentStatus: 'verified',
+          paymentRejectionReason: '',
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedBooking) {
+      throw new BookingError(
+        'Booking status changed by another request. Refresh and try again.',
+        409,
+        'status_conflict'
+      );
+    }
+
     res.status(200).json(updatedBooking);
   } catch (error) {
-    console.error('Verify payment error:', error);
-    res.status(500).json({ message: error.message });
+    sendError(res, error, 'Could not verify payment');
   }
 };
 
 // @desc    Reject payment
 // @route   PUT /api/bookings/:id/reject-payment
-// @access  Private/Manager
+// @access  Private/Manager/Admin
 const rejectPayment = async (req, res) => {
   try {
-    const { reason } = req.body;
     const booking = await Booking.findById(req.params.id).populate('hallId');
 
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    // Get the hall to verify manager ownership
-    const Hall = require('../models/hallModel');
-    const hall = await Hall.findById(booking.hallId._id);
+    assertManagerCanManage(booking, req.user);
 
-    if (!hall) {
-      return res.status(404).json({ message: 'Hall not found' });
-    }
-
-    // Verify the manager owns this hall
-    if (hall.manager.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Not authorized to reject this booking' });
-    }
-
-    // Check if booking has payment submitted
     if (booking.status !== 'payment_submitted') {
-      return res.status(400).json({ message: 'No payment proof submitted for this booking' });
+      throw new BookingError('No payment proof is awaiting verification for this booking');
     }
 
-    if (!reason) {
-      return res.status(400).json({ message: 'Rejection reason is required' });
+    const reason = readString(req.body.reason, 'reason', { max: 500 });
+
+    const updatedBooking = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: 'payment_submitted' },
+      {
+        $set: {
+          paymentVerified: false,
+          prebookingPaid: false,
+          paymentStatus: 'rejected',
+          paymentRejectionReason: reason,
+          status: 'payment_rejected',
+          // Give the customer a fresh window to submit a corrected proof.
+          paymentExpiresAt: paymentDeadline(),
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedBooking) {
+      throw new BookingError(
+        'Booking status changed by another request. Refresh and try again.',
+        409,
+        'status_conflict'
+      );
     }
 
-    // Reject payment
-    booking.paymentVerified = false;
-    booking.prebookingPaid = false;
-    booking.paymentRejectionReason = reason;
-    booking.status = 'payment_rejected';
-    // Keep transaction ID and payment proof for reference
-
-    const updatedBooking = await booking.save();
     res.status(200).json(updatedBooking);
   } catch (error) {
-    console.error('Reject payment error:', error);
-    res.status(500).json({ message: error.message });
+    sendError(res, error, 'Could not reject payment');
   }
 };
 
-// @desc    Add custom food to booking
+// @desc    Replace custom food request (before payment)
 // @route   POST /api/bookings/:id/custom-food
 // @access  Private/Customer
 const addCustomFood = async (req, res) => {
   try {
-    const { customFood } = req.body;
     const booking = await Booking.findById(req.params.id).populate('hallId');
 
     if (!booking) {
@@ -402,32 +510,41 @@ const addCustomFood = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to update this booking' });
     }
 
-    // Validate items against hall menu
+    if (booking.status !== 'awaiting_payment') {
+      throw new BookingError('Custom food can only be changed before payment is submitted');
+    }
+
     const hall = await Hall.findById(booking.hallId._id);
-    const hallMenu = hall.menu || [];
-    
-    // Check if all items exist in hall menu
-    // This is a basic check, in a real app we might want to be more strict
-    // For now, we trust the frontend to send valid items, but we could verify names/prices here.
-    
-    booking.customFood = customFood;
-    booking.customFoodStatus = 'pending';
-    
+    if (!hall) {
+      throw new BookingError('Hall not found', 404, 'hall_not_found');
+    }
+
+    const { items, foodPerHead } = normalizeCustomFood(req.body.customFood, hall.menu || []);
+    const amounts = recalculateForFood(booking, hall, foodPerHead);
+
+    booking.customFood = items;
+    booking.customFoodStatus = items.length > 0 ? 'pending' : 'none';
+    booking.foodPerHead = foodPerHead;
+    booking.customSeatPrice = amounts.seatPrice;
+    booking.totalAmount = amounts.totalAmount;
+    booking.prebookingAmount = amounts.prebookingAmount;
+    booking.prebookingPercentage = getPrebookingPercentage();
+
     const updatedBooking = await booking.save();
     res.status(200).json(updatedBooking);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error, 'Could not update custom food');
   }
 };
 
-// @desc    Update custom food status
+// @desc    Approve or reject custom food
 // @route   PATCH /api/bookings/:id/custom-food-status
-// @access  Private/Manager
+// @access  Private/Manager/Admin
 const updateCustomFoodStatus = async (req, res) => {
   try {
     const { status } = req.body;
     if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ message: 'Invalid custom food status' });
+      throw new BookingError('Invalid custom food status');
     }
 
     const booking = await Booking.findById(req.params.id).populate('hallId');
@@ -436,72 +553,119 @@ const updateCustomFoodStatus = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
+    assertManagerCanManage(booking, req.user);
+
+    if (booking.customFoodStatus !== 'pending') {
+      throw new BookingError('There is no pending custom food request for this booking');
+    }
+    if (['payment_submitted', 'approved', 'completed'].includes(booking.status)) {
+      throw new BookingError('Custom food cannot be changed after payment is submitted');
+    }
+
     const hall = await Hall.findById(booking.hallId._id);
     if (!hall) {
-      return res.status(404).json({ message: 'Hall not found' });
-    }
-    if (req.user.role !== 'admin' && hall.manager.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Not authorized to update this booking' });
+      throw new BookingError('Hall not found', 404, 'hall_not_found');
     }
 
+    // Stored prices were validated against the menu when the request was made.
+    const requestedFoodPerHead = (booking.customFood || []).reduce(
+      (total, item) => total + Number(item.price) * Number(item.quantity),
+      0
+    );
+    const chargedFoodPerHead = status === 'approved' ? requestedFoodPerHead : 0;
+    const amounts = recalculateForFood(booking, hall, chargedFoodPerHead);
+
+    // Absolute recalculation (never "add the difference") prevents duplicate
+    // charges if this endpoint is retried.
     booking.customFoodStatus = status;
-
-    if (status === 'approved') {
-      // Calculate new prices
-      let foodTotal = 0;
-      booking.customFood.forEach(item => {
-        foodTotal += item.price * item.quantity;
-      });
-
-      // Base seat price is the hall price
-      // If there was a package selected, it's already in totalAmount, but we need to be careful.
-      // The current logic is: totalPrice = (hall.price * guests) + package.price
-      // The requirement says: customSeatPrice = baseSeatPrice + sum(customFood prices)
-      // totalPrice = customSeatPrice * guestCount
-      
-      // Wait, if customSeatPrice includes food, then it's per head?
-      // "customSeatPrice = baseSeatPrice + sum(customFood prices)" implies per head.
-      // So if I add a chicken karahi (Rs 500), is that per head? Usually yes for a marriage hall menu.
-      // Let's assume customFood items are per head additions.
-      
-      const baseSeatPrice = hall.price;
-      booking.customSeatPrice = baseSeatPrice + foodTotal;
-      
-      // Recalculate total amount
-      // Note: If a package was selected, it might complicate things. 
-      // The current system adds package price as a lump sum or per head?
-      // In Booking.jsx: totalPrice = (hall.price * guests) + package.price
-      // Package price seems to be a lump sum in the current code (it's just added).
-      // But usually packages are per head. 
-      // Let's look at Booking.jsx again: `(hall ? hall.price * (formData.guestCount || 0) : 0) + (selectedPackage ? selectedPackage.price : 0)`
-      // Yes, hall price is per guest, package is lump sum (weird but okay).
-      
-      // So new Total = (customSeatPrice * guests) + (packagePrice if any)
-      // We don't store packagePrice separately in booking model, just totalAmount.
-      // We can infer package price or just update the "seat portion" of the total.
-      
-      // Old Seat Total = hall.price * guests
-      // New Seat Total = customSeatPrice * guests
-      // Difference = (customSeatPrice - hall.price) * guests
-      // New Total Amount = Old Total Amount + Difference
-      
-      const oldSeatTotal = hall.price * booking.guestsCount;
-      const newSeatTotal = booking.customSeatPrice * booking.guestsCount;
-      const difference = newSeatTotal - oldSeatTotal;
-      
-      booking.totalAmount = booking.totalAmount + difference;
-      
-      // Recalculate prebooking amount (10%)? 
-      // Usually prebooking is paid on initial booking. 
-      // If total increases, maybe we don't ask for more prebooking, just final payment.
-      // But we should update the record.
-      booking.prebookingAmount = booking.totalAmount * 0.1;
-    }
+    booking.foodPerHead = chargedFoodPerHead;
+    booking.customSeatPrice = amounts.seatPrice;
+    booking.totalAmount = amounts.totalAmount;
+    booking.prebookingAmount = amounts.prebookingAmount;
+    booking.prebookingPercentage = getPrebookingPercentage();
 
     const updatedBooking = await booking.save();
     res.status(200).json(updatedBooking);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendError(res, error, 'Could not update custom food status');
+  }
+};
+
+// @desc    Cancel own booking
+// @route   PUT /api/bookings/:id/cancel
+// @access  Private/Customer
+const cancelBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    if (booking.customerId.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Not authorized to cancel this booking' });
+    }
+
+    assertCanCancel(booking);
+
+    applyCancellation(booking, { reason: req.body.reason });
+
+    const updatedBooking = await booking.save();
+    res.status(200).json(updatedBooking);
+  } catch (error) {
+    sendError(res, error, 'Could not cancel booking');
+  }
+};
+
+// @desc    Reject a booking request (manager/admin)
+// @route   PUT /api/bookings/:id/reject
+// @access  Private/Manager/Admin
+const rejectBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id).populate('hallId');
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    assertManagerCanManage(booking, req.user);
+
+    if (!['awaiting_payment', 'payment_submitted', 'payment_rejected'].includes(booking.status)) {
+      throw new BookingError('This booking cannot be rejected in its current status');
+    }
+
+    assertStatusTransition(booking.status, 'rejected');
+
+    const now = new Date();
+    const reason = readString(req.body.reason, 'reason', {
+      max: 500,
+      required: false,
+    }) || 'Rejected by hall management';
+
+    const updatedBooking = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: booking.status },
+      {
+        $set: {
+          status: 'rejected',
+          rejectedAt: now,
+          cancellationReason: reason,
+          ...(booking.paymentStatus === 'submitted' ? { paymentStatus: 'rejected' } : {}),
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedBooking) {
+      throw new BookingError(
+        'Booking status changed by another request. Refresh and try again.',
+        409,
+        'status_conflict'
+      );
+    }
+
+    res.status(200).json(updatedBooking);
+  } catch (error) {
+    sendError(res, error, 'Could not reject booking');
   }
 };
 
@@ -518,4 +682,7 @@ module.exports = {
   updateCustomFoodStatus,
   getManagerBookings,
   getHallBookings,
+  getHallAvailabilityStatus,
+  cancelBooking,
+  rejectBooking,
 };

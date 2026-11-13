@@ -23,10 +23,12 @@ const CustomFoodReviewModal = ({ booking, onClose, onSuccess }) => {
         }
     };
 
-    const foodTotal = booking.customFood.reduce((total, item) => total + (item.price * item.quantity), 0);
-    const baseSeatPrice = booking.hallId.price;
-    const newSeatPrice = baseSeatPrice + foodTotal;
-    const additionalTotal = foodTotal * booking.guestsCount;
+    const requestedFoodPerHead = booking.customFood.reduce((total, item) => total + (item.price * item.quantity), 0);
+    const baseSeatPrice = Number(booking.hallPrice ?? booking.hallId?.price) || 0;
+    const packagePrice = Number(booking.packagePrice) || 0;
+    const totalIfApproved = Math.round((baseSeatPrice + requestedFoodPerHead) * booking.guestsCount + packagePrice);
+    const totalIfRejected = Math.round(baseSeatPrice * booking.guestsCount + packagePrice);
+    const rejectedReduction = Math.max(0, totalIfApproved - totalIfRejected);
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -66,19 +68,25 @@ const CustomFoodReviewModal = ({ booking, onClose, onSuccess }) => {
 
                     <div className="bg-gray-50 p-4 rounded-lg border">
                         <div className="flex justify-between mb-2">
-                            <span>Extra Cost per Seat:</span>
-                            <span className="font-bold">Rs {foodTotal.toLocaleString()}</span>
+                            <span>Current Booking Total:</span>
+                            <span className="font-bold">Rs {Number(booking.totalAmount).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between mb-2">
-                            <span>New Seat Price:</span>
-                            <span className="font-bold">Rs {newSeatPrice.toLocaleString()}</span>
+                            <span>Food Cost per Seat:</span>
+                            <span className="font-bold">Rs {requestedFoodPerHead.toLocaleString()}</span>
                         </div>
-                        <div className="border-t pt-2 mt-2 flex justify-between text-lg font-bold text-primary">
-                            <span>Total Increase:</span>
-                            <span>+ Rs {additionalTotal.toLocaleString()}</span>
+                        <div className="flex justify-between mb-2 pt-2 border-t">
+                            <span>Total if approved:</span>
+                            <span className="font-bold text-emerald-700">Rs {totalIfApproved.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span>Total if rejected:</span>
+                            <span className="font-bold text-red-600">
+                                Rs {totalIfRejected.toLocaleString()} (-Rs {rejectedReduction.toLocaleString()})
+                            </span>
                         </div>
                         <p className="text-xs text-gray-500 mt-2 text-right">
-                            (Extra Cost per Seat * {booking.guestsCount} Guests)
+                            Requested items are already included in the current total until rejected.
                         </p>
                     </div>
                 </div>

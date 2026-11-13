@@ -21,7 +21,7 @@ const commissionPaymentSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'verified', 'rejected'],
+        enum: ['pending', 'verified', 'rejected', 'overdue'],
         default: 'pending'
     },
     dueDate: {
@@ -40,5 +40,12 @@ const commissionPaymentSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// One commission record per booking. This is the database-level guard against
+// duplicate charges when a booking is completed more than once.
+commissionPaymentSchema.index(
+    { bookingId: 1 },
+    { unique: true, name: 'uniq_commission_per_booking' }
+);
 
 module.exports = mongoose.model('CommissionPayment', commissionPaymentSchema);

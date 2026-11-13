@@ -96,15 +96,15 @@ const ManagerDashboard = () => {
     };
 
     const handleReject = async (bookingId) => {
-        if (window.confirm('Are you sure you want to reject and delete this booking?')) {
-            try {
-                await bookingService.deleteBooking(bookingId);
-                toast.success('Booking rejected and deleted successfully');
-                fetchBookings();
-            } catch (error) {
-                console.error('Reject error:', error);
-                toast.error(error.response?.data?.message || 'Failed to reject booking');
-            }
+        const reason = window.prompt('Reason for rejecting this booking:', 'Rejected by hall management');
+        if (reason === null) return;
+        try {
+            await bookingService.rejectBooking(bookingId, reason);
+            toast.success('Booking rejected. The record has been preserved.');
+            fetchBookings();
+        } catch (error) {
+            console.error('Reject error:', error);
+            toast.error(error.response?.data?.message || 'Failed to reject booking');
         }
     };
 
@@ -123,14 +123,14 @@ const ManagerDashboard = () => {
     };
 
     const handleDeleteBooking = async (bookingId) => {
-        if (window.confirm('Are you sure you want to delete this booking?')) {
+        if (window.confirm('Archive this booking? Booking and payment history will be preserved.')) {
             try {
                 await bookingService.deleteBooking(bookingId);
-                toast.success('Booking deleted successfully');
+                toast.success('Booking archived successfully');
                 fetchBookings();
             } catch (error) {
-                console.error('Delete error:', error);
-                toast.error(error.response?.data?.message || 'Failed to delete booking');
+                console.error('Archive error:', error);
+                toast.error(error.response?.data?.message || 'Failed to archive booking');
             }
         }
     };
@@ -337,7 +337,7 @@ const ManagerDashboard = () => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {bookings.length > 0 ? bookings.map((booking) => {
-                                        const commissionAmount = booking.totalAmount * 0.05;
+                                        const commissionAmount = booking.commissionAmount || Math.round(booking.totalAmount * 0.05);
                                         const commissionPayment = payments.find(p => p.bookingId?._id === booking._id);
 
                                         return (
@@ -396,7 +396,10 @@ const ManagerDashboard = () => {
                                                             <button onClick={() => handleComplete(booking._id)} className="px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors">Complete</button>
                                                         )}
                                                         {booking.status === 'rejected' && (
-                                                            <button onClick={() => handleDeleteBooking(booking._id)} className="px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg text-xs font-bold transition-colors">Delete</button>
+                                                            <button onClick={() => handleDeleteBooking(booking._id)} className="px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg text-xs font-bold transition-colors">Archive</button>
+                                                        )}
+                                                        {['cancelled', 'expired'].includes(booking.status) && (
+                                                            <button onClick={() => handleDeleteBooking(booking._id)} className="px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg text-xs font-bold transition-colors">Archive</button>
                                                         )}
                                                     </div>
                                                 </td>
