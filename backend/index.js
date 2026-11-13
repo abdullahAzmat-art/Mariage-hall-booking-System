@@ -7,11 +7,27 @@ const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const { Server } = require('socket.io');
 const userModel = require('./models/userModel');
+const Booking = require('./models/bookingModel');
+const { expireStaleBookings } = require('./services/availabilityService');
 const { createServer } = require('http');
 const messageModel = require('./models/messageModel');
 
 dotenv.config();
 connectDB();
+
+// Surface index build problems instead of crashing when a deployment already
+// contains duplicate active bookings. Run scripts/ensureBookingIndexes.js once
+// to resolve duplicates and build the unique slot/transaction indexes.
+Booking.on('index', (error) => {
+    if (error) console.error('Booking index build failed:', error.message);
+});
+
+// Release date slots whose payment window has expired.
+const PAYMENT_EXPIRY_INTERVAL_MS = 15 * 60 * 1000;
+const expiryTimer = setInterval(() => {
+    expireStaleBookings().catch((error) => console.error('Booking expiry job failed:', error.message));
+}, PAYMENT_EXPIRY_INTERVAL_MS);
+expiryTimer.unref();
 
 const app = express();
 
