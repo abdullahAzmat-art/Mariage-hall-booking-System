@@ -16,6 +16,11 @@ const bookingService = {
         return response.data;
     },
 
+    getHallAvailability: async (hallId) => {
+        const response = await api.get(`/bookings/hall/${hallId}/availability`);
+        return response.data;
+    },
+
     getAllBookings: async () => {
         const response = await api.get('/bookings');
         return response.data;
@@ -33,6 +38,16 @@ const bookingService = {
 
     deleteBooking: async (id) => {
         const response = await api.delete(`/bookings/${id}`);
+        return response.data;
+    },
+
+    cancelBooking: async (id, reason = '') => {
+        const response = await api.put(`/bookings/${id}/cancel`, { reason });
+        return response.data;
+    },
+
+    rejectBooking: async (id, reason = '') => {
+        const response = await api.put(`/bookings/${id}/reject`, { reason });
         return response.data;
     },
 
