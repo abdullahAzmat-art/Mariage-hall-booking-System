@@ -11,6 +11,7 @@ const Booking = require('./models/bookingModel');
 const { expireStaleBookings } = require('./services/availabilityService');
 const { createServer } = require('http');
 const messageModel = require('./models/messageModel');
+const { notFoundHandler, globalErrorHandler } = require('./middleware/errorMiddleware');
 
 dotenv.config();
 connectDB();
@@ -45,6 +46,11 @@ app.use('/api/chat', require('./routes/chatRoutes'));
 app.use('/api/commissions', require('./routes/commissionRoutes'));
 app.use('/api/utility', require('./routes/utilityRoutes'));
 app.use('/api/rag', require('./routes/ragRoutes'));
+
+// Keep these last: the 404 catches every unmatched route, and the error
+// handler must be the final middleware so it receives errors from all routes.
+app.use(notFoundHandler);
+app.use(globalErrorHandler);
 
 const server = createServer(app);
 
